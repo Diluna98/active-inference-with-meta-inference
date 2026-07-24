@@ -26,13 +26,18 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
+  "active-inference-navigation-agent @ https://github.com/Diluna98/active-inference-navigation-agent/archive/refs/heads/main.zip",
+  "matplotlib>=3.7",
   "numpy>=1.24",
+  "pillow>=10.0",
   "scipy>=1.10",
   "pyaif-toolkit @ https://github.com/Diluna98/python_active_inference/archive/refs/heads/codex/continuous-observations-v0.2.zip",
 ]
 
 [project.scripts]
 active-inference-meta = "active_inference_meta.cli:main"
+active-inference-meta-navigation = "active_inference_meta.adaptive_navigation:main"
+active-inference-meta-navigation-gif = "active_inference_meta.adaptive_animation:main"
 
 [project.optional-dependencies]
 dev = [

@@ -8,6 +8,17 @@ representation used by a task-level agent. The meta-level agent balances task
 uncertainty and prediction quality against inference latency and available
 compute.
 
+![Live navigation with meta-inference rebuilding the source model](docs/results/adaptive_meta_navigation.gif)
+
+The animation runs the continuous RSSI task from
+[Active-Inference Navigation Agent](https://github.com/Diluna98/active-inference-navigation-agent).
+The task agent begins with a `2×2` source representation. Meta-inference then
+selects new resolutions from live task evidence. Every accepted switch rebuilds
+the PyAIF navigation model, changes the source-state dimension, and
+conservatively remaps the existing source posterior into the new grid. The
+navigation trajectory therefore continues without discarding the accumulated
+source belief.
+
 The implementation uses
 [PyAIF](https://github.com/Diluna98/python_active_inference) for state and
 policy inference.
@@ -99,6 +110,39 @@ Each trace record has this structure:
 }
 ```
 
+## Run adaptive RSSI navigation
+
+Run the real task/meta-agent loop:
+
+```bash
+active-inference-meta-navigation
+```
+
+Recreate the README animation:
+
+```bash
+active-inference-meta-navigation-gif
+```
+
+During each task update, the adapter measures:
+
+- KL information gain in the source-location posterior
+- Predictive surprise of the observed RSSI
+- Task state-inference latency
+- Available CPU supplied by the runtime configuration
+
+The learned latency likelihood came from a different reference platform.
+Consequently, the example records the raw measured latency but applies a
+configurable calibration factor before passing latency to the learned
+meta-generative model. Use `--reference-latency-scale` to calibrate another
+machine.
+
+Meta-inference is performed every three task updates by default. If it selects
+a different representation, that task action is not executed: the model is
+rebuilt first, its beliefs are remapped, and task inference resumes on the next
+update. Adaptive reconstruction currently supports the navigation package's
+shallow task-inference mode.
+
 ## Python API
 
 ```python
@@ -126,6 +170,22 @@ print(decision.expected_free_energy)
 For sequential operation, call `infer()` repeatedly or use
 `infer_sequence()`. The controller carries posterior beliefs about task context
 and compute state between decisions.
+
+The integrated navigation loop is also available as a Python API:
+
+```python
+from active_inference_meta import (
+    AdaptiveNavigationConfig,
+    run_adaptive_navigation_episode,
+)
+
+result = run_adaptive_navigation_episode(
+    config=AdaptiveNavigationConfig(maximum_steps=18)
+)
+
+print(result.resolutions)
+print(result.switch_steps)
+```
 
 ## Learned meta-likelihood
 
