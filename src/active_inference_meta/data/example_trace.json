@@ -1,0 +1,50 @@
+[
+  {
+    "information_gain_proxy": 0.0478,
+    "prediction_error": 2.3510,
+    "inference_latency_ms": 78.6036,
+    "cpu_availability": 100.0
+  },
+  {
+    "information_gain_proxy": 0.0549,
+    "prediction_error": 2.4161,
+    "inference_latency_ms": 76.9677,
+    "cpu_availability": 100.0
+  },
+  {
+    "information_gain_proxy": 0.0710,
+    "prediction_error": 2.5437,
+    "inference_latency_ms": 76.5585,
+    "cpu_availability": 100.0
+  },
+  {
+    "information_gain_proxy": 0.0959,
+    "prediction_error": 2.7495,
+    "inference_latency_ms": 78.8597,
+    "cpu_availability": 100.0
+  },
+  {
+    "information_gain_proxy": 0.1379,
+    "prediction_error": 2.9656,
+    "inference_latency_ms": 77.0649,
+    "cpu_availability": 100.0
+  },
+  {
+    "information_gain_proxy": 0.1755,
+    "prediction_error": 3.3393,
+    "inference_latency_ms": 77.6891,
+    "cpu_availability": 100.0
+  },
+  {
+    "information_gain_proxy": 0.2897,
+    "prediction_error": 2.9938,
+    "inference_latency_ms": 111.4838,
+    "cpu_availability": 100.0
+  },
+  {
+    "information_gain_proxy": 0.8450,
+    "prediction_error": 2.9643,
+    "inference_latency_ms": 112.1767,
+    "cpu_availability": 100.0
+  }
+]

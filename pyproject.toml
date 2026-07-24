@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "active-inference-with-meta-inference"
+version = "0.1.0"
+description = "Hierarchical active inference for adaptive model representation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Diluna A. Warnakulasuriya" }]
+keywords = [
+  "active-inference",
+  "meta-inference",
+  "model-selection",
+  "bounded-rationality",
+  "robotics",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "pyaif-toolkit @ https://github.com/Diluna98/python_active_inference/archive/refs/heads/codex/continuous-observations-v0.2.zip",
+]
+
+[project.scripts]
+active-inference-meta = "active_inference_meta.cli:main"
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "pytest>=7.4",
+  "ruff>=0.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/Diluna98/active-inference-with-meta-inference"
+Repository = "https://github.com/Diluna98/active-inference-with-meta-inference"
+Issues = "https://github.com/Diluna98/active-inference-with-meta-inference/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+active_inference_meta = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
