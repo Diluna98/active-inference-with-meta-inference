@@ -31,7 +31,7 @@ class AdaptiveNavigationConfig:
             policy_samples=500,
             exact_state_limit=1,
             random_seed=7,
-            paper_compatible_likelihood=True,
+            normalized_signal_preference=True,
         )
     )
     initial_resolution: int = 2
@@ -40,17 +40,17 @@ class AdaptiveNavigationConfig:
 
     def __post_init__(self) -> None:
         if self.navigation.temporal_horizon != 3:
-            raise ValueError("The paper task configuration uses a three-step horizon.")
+            raise ValueError("Adaptive navigation requires a three-step horizon.")
         if self.navigation.message_passing_iterations != 10:
-            raise ValueError("The paper task configuration uses 10 message-passing iterations.")
-        if not self.navigation.paper_compatible_likelihood:
-            raise ValueError("The paper-compatible RSSI likelihood must be enabled.")
+            raise ValueError("Adaptive navigation requires 10 message-passing iterations.")
+        if not self.navigation.normalized_signal_preference:
+            raise ValueError("The normalized RSSI signal preference must be enabled.")
         if self.initial_resolution not in (2, 5, 10, 20):
             raise ValueError("initial_resolution must be one of 2, 5, 10, or 20.")
         if self.maximum_steps < 1 or self.meta_interval < 1:
             raise ValueError("maximum_steps and meta_interval must be positive.")
         if self.meta_interval != 3:
-            raise ValueError("The paper meta-inference interval is three task steps.")
+            raise ValueError("The meta-inference interval must be three task steps.")
 
 
 @dataclass(frozen=True)
@@ -238,7 +238,7 @@ def rebuild_navigation_agent(
     return rebuilt
 
 
-PAPER_BASELINE_LATENCY_MS = {
+REFERENCE_BASELINE_LATENCY_MS = {
     2: 87.86553494,
     5: 117.4742106,
     10: 248.69090593,
@@ -246,21 +246,24 @@ PAPER_BASELINE_LATENCY_MS = {
 }
 
 
-def paper_cpu_availability(resolution: int, inference_latency_ms: float) -> float:
-    """Return the paper's baseline-ratio CPU-availability observation."""
+def baseline_compute_availability(
+    resolution: int,
+    inference_latency_ms: float,
+) -> float:
+    """Return the baseline-ratio compute-availability observation."""
 
-    baseline = PAPER_BASELINE_LATENCY_MS[int(resolution)]
+    baseline = REFERENCE_BASELINE_LATENCY_MS[int(resolution)]
     availability = 100.0 * baseline / max(float(inference_latency_ms), 1e-16)
     return float(np.clip(availability, 0.0, 100.0))
 
 
-def paper_policy_averaged_surprise(
+def policy_averaged_rssi_surprise(
     agent,
     observation,
     *,
     prediction_time_index: int = 0,
 ) -> float:
-    """Calculate the exact policy-averaged binned RSSI surprise."""
+    """Calculate the policy-averaged binned RSSI surprise."""
 
     predictions = np.stack(
         [
@@ -282,8 +285,8 @@ def paper_policy_averaged_surprise(
     )
 
 
-def infer_paper_task_policies(agent, trial: int, time_step: int) -> None:
-    """Apply the paper's deep continuous policy-value equation."""
+def infer_adaptive_task_policies(agent, trial: int, time_step: int) -> None:
+    """Apply the adaptive task agent's deep continuous policy-value equation."""
 
     agent.infer_policies(trial, time_step)
     agent.G_policy = np.asarray(
@@ -355,16 +358,16 @@ def run_adaptive_navigation_episode(
         start = time.perf_counter()
         agent.infer_states(0, step_index)
         measured_latency_ms = (time.perf_counter() - start) * 1000.0
-        infer_paper_task_policies(agent, 0, step_index)
+        infer_adaptive_task_policies(agent, 0, step_index)
         navigation_action = agent.select_action()
 
         source_posterior = _source_belief(agent, step_index)
         information_gain = agent.likelihood.model.compute_sensitivity(observation)
-        prediction_error = paper_policy_averaged_surprise(agent, observation)
+        prediction_error = policy_averaged_rssi_surprise(agent, observation)
         available_cpu = float(
             cpu_availability(inference_resolution, measured_latency_ms)
             if cpu_availability is not None
-            else paper_cpu_availability(
+            else baseline_compute_availability(
                 inference_resolution,
                 measured_latency_ms,
             )
@@ -465,7 +468,7 @@ def main() -> None:
             policy_samples=500,
             exact_state_limit=1,
             random_seed=args.seed,
-            paper_compatible_likelihood=True,
+            normalized_signal_preference=True,
         ),
         initial_resolution=args.initial_resolution,
         maximum_steps=args.steps,

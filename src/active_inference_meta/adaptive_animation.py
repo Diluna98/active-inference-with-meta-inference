@@ -157,7 +157,7 @@ def save_adaptive_navigation_gif(
             fontsize=8,
         )
         metrics_axis.set_title(
-            f"Paper task metrics | raw inference {step.measured_latency_ms:.2f} ms | "
+            f"Task metrics | raw inference {step.measured_latency_ms:.2f} ms | "
             f"CPU availability {step.cpu_availability:.1f}%"
         )
 

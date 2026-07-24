@@ -5,9 +5,9 @@ from active_inference_navigation import NavigationAgentConfig, build_navigation_
 
 from active_inference_meta import (
     AdaptiveNavigationConfig,
-    infer_paper_task_policies,
-    paper_cpu_availability,
-    paper_policy_averaged_surprise,
+    baseline_compute_availability,
+    infer_adaptive_task_policies,
+    policy_averaged_rssi_surprise,
     rebuild_navigation_agent,
     remap_spatial_belief,
     run_adaptive_navigation_episode,
@@ -36,13 +36,13 @@ def test_rebuild_changes_source_state_dimension_and_preserves_beliefs():
         policy_samples=50,
         exact_state_limit=1,
         random_seed=7,
-        paper_compatible_likelihood=True,
+        normalized_signal_preference=True,
     )
     agent = build_navigation_agent(config)
     agent.reset()
     agent.observe(np.array([487.5, 487.5, 1.15]), time_step=0)
     agent.infer_states()
-    infer_paper_task_policies(agent, 0, 0)
+    infer_adaptive_task_policies(agent, 0, 0)
     agent.select_action()
     expected_source = remap_spatial_belief(
         agent.policy_dep_posteriors[0, 0, 2],
@@ -60,15 +60,15 @@ def test_rebuild_changes_source_state_dimension_and_preserves_beliefs():
     )
 
 
-def test_paper_cpu_availability_uses_raw_latency_and_resolution_baseline():
+def test_compute_availability_uses_raw_latency_and_resolution_baseline():
     baseline = 87.86553494
 
-    assert paper_cpu_availability(2, baseline) == 100.0
-    assert paper_cpu_availability(2, 2.0 * baseline) == 50.0
-    assert paper_cpu_availability(2, baseline / 2.0) == 100.0
+    assert baseline_compute_availability(2, baseline) == 100.0
+    assert baseline_compute_availability(2, 2.0 * baseline) == 50.0
+    assert baseline_compute_availability(2, baseline / 2.0) == 100.0
 
 
-def test_paper_surprise_is_unweighted_mean_across_policy_predictions():
+def test_rssi_surprise_is_unweighted_mean_across_policy_predictions():
     expected_observations = np.empty((3, 1, 3), dtype=object)
     for policy_index, probability in enumerate((0.8, 0.4, 0.1)):
         signal_prediction = np.full(100, (1.0 - probability) / 99.0)
@@ -79,7 +79,7 @@ def test_paper_surprise_is_unweighted_mean_across_policy_predictions():
         policy_dep_expected_obs=expected_observations,
     )
 
-    surprise = paper_policy_averaged_surprise(
+    surprise = policy_averaged_rssi_surprise(
         agent,
         np.array([0.0, 0.0, 15.0]),
     )
@@ -90,7 +90,7 @@ def test_paper_surprise_is_unweighted_mean_across_policy_predictions():
     )
 
 
-def test_paper_pipeline_rebuilds_running_deep_navigation_model():
+def test_adaptive_pipeline_rebuilds_running_deep_navigation_model():
     result = run_adaptive_navigation_episode(
         config=AdaptiveNavigationConfig(maximum_steps=13),
     )
@@ -118,7 +118,7 @@ def test_paper_pipeline_rebuilds_running_deep_navigation_model():
     assert all(
         np.isclose(
             step.cpu_availability,
-            paper_cpu_availability(
+            baseline_compute_availability(
                 step.inference_resolution,
                 step.measured_latency_ms,
             ),

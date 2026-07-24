@@ -148,7 +148,7 @@ class MetaLikelihood:
         self,
         state_beliefs,
     ) -> float:
-        """Return the Normal-Gamma information gain used by the paper agent."""
+        """Return the meta agent's Normal-Gamma parameter information gain."""
 
         resolution = np.asarray(state_beliefs[0], dtype=float)
         context = np.asarray(state_beliefs[1], dtype=float)
@@ -195,7 +195,7 @@ class MetaLikelihood:
         state_beliefs,
         learning_rate: float = 0.1,
     ) -> None:
-        """Apply the paper's online prediction-error and latency updates."""
+        """Apply online prediction-error and latency parameter updates."""
 
         values = np.asarray(observation, dtype=float)
         resolution = np.asarray(state_beliefs[0], dtype=float)

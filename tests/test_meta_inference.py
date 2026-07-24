@@ -36,7 +36,7 @@ def test_meta_likelihood_modalities_are_finite_and_nonnegative():
         assert np.all(values >= 0.0)
 
 
-def test_meta_preferences_match_paper_utility_equations():
+def test_meta_preferences_match_configured_utility_equations():
     likelihood = MetaLikelihood()
     size = likelihood.grid_size
     context, prediction_error = np.meshgrid(
