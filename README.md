@@ -11,8 +11,7 @@ task agent's source-location representation.
 ![Live navigation with meta-inference rebuilding the source model](docs/results/adaptive_meta_navigation.gif)
 
 The animation runs the simulated continuous RSSI task from
-[Active-Inference Navigation Agent](https://github.com/Diluna98/active-inference-navigation-agent)
-with the algorithmic configuration used for the paper experiments.
+[Active-Inference Navigation Agent](https://github.com/Diluna98/active-inference-navigation-agent).
 The task agent begins with a `2×2` source representation. Meta-inference
 selects among `2×2`, `5×5`, `10×10`, and `20×20` representations from
 task-level evidence and computational measurements. Every accepted switch
@@ -112,8 +111,8 @@ Each trace record has this structure:
 }
 ```
 
-These field names are retained for API compatibility. In this implementation,
-`information_gain_proxy` is the RSSI Fisher-information proxy,
+In this implementation, `information_gain_proxy` is the RSSI
+Fisher-information proxy,
 `prediction_error` is policy-averaged predictive surprise, and
 `cpu_availability` is the baseline-ratio compute-availability proxy.
 
@@ -131,16 +130,16 @@ Recreate the README animation:
 active-inference-meta-navigation-gif
 ```
 
-## Paper-compatible configuration
+## Adaptive navigation configuration
 
-The integrated simulation reproduces the paper's algorithmic setup:
+The integrated simulation uses:
 
 - Three-step deep temporal task inference with 10 message-passing iterations
 - 25 cardinal movement policies and 500 policy samples
 - The master-grid RSSI Fisher-information proxy
 - The unweighted, policy-averaged binned RSSI surprise
 - Raw wall-clock latency measured around task state inference only
-- Compute availability derived from the paper's resolution-specific latency baselines
+- Compute availability derived from bundled resolution-specific latency baselines
 - Meta-inference every three task updates
 - Online learning of the meta-level prediction-error and latency parameters
 
@@ -159,39 +158,13 @@ clip(100 × baseline_latency[resolution] / measured_latency, 0, 100)
 This is a baseline-ratio proxy, not a direct operating-system CPU-utilization
 measurement. Absolute latency and therefore the inferred compute state depend
 on the processor, operating-system load, Python runtime, and PyAIF version.
-Reproducing the algorithm does not imply bit-for-bit identical trajectories or
-wall-clock measurements.
+Runs on different systems may therefore produce different timing observations
+and model-selection trajectories.
 
 If meta-inference selects a different representation, that task action is not
 executed. The model is rebuilt first, all policy- and time-dependent source
 beliefs and policy predictions are preserved, and task inference resumes on
 the next update.
-
-## Adapting the pipeline to real sensors
-
-The paper-compatible simulation supplies task observations in the form
-`[x, y, RSSI]` and uses a continuous Gaussian likelihood for those
-observations. In a real deployment, these values will come from the robot's
-localization system and radio receiver.
-
-If the real system retains the same observation semantics, the task likelihood
-should be calibrated using real sensor data: coordinate uncertainty, RSSI
-noise, signal decay, workspace geometry, and receiver-dependent scaling. If
-the observation modalities change, the likelihood dependencies and the
-task-level information and surprise calculations must change with them.
-
-The remainder of the hierarchy can retain the paper procedure:
-
-- Deep temporal task inference and policy evaluation
-- Task-metric extraction from the calibrated likelihood model
-- The four-observation meta-generative model
-- The three-step meta-inference schedule
-- Belief-preserving representation switching
-
-The target computer also requires new latency baselines and, preferably,
-retraining or online adaptation of the meta-level latency likelihood. The
-paper baselines describe the experimental platform; they are retained here for
-paper-compatible simulation, not presented as universal hardware constants.
 
 ## Python API
 
