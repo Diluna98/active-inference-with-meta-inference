@@ -11,13 +11,13 @@ compute.
 ![Live navigation with meta-inference rebuilding the source model](docs/results/adaptive_meta_navigation.gif)
 
 The animation runs the continuous RSSI task from
-[Active-Inference Navigation Agent](https://github.com/Diluna98/active-inference-navigation-agent).
-The task agent begins with a `2×2` source representation. Meta-inference then
-selects new resolutions from live task evidence. Every accepted switch rebuilds
-the PyAIF navigation model, changes the source-state dimension, and
-conservatively remaps the existing source posterior into the new grid. The
-navigation trajectory therefore continues without discarding the accumulated
-source belief.
+[Active-Inference Navigation Agent](https://github.com/Diluna98/active-inference-navigation-agent)
+using the task and meta-inference procedure used for the paper experiments.
+The task agent begins with a `2×2` source representation. Meta-inference
+selects resolutions from live task evidence. Every accepted switch rebuilds the
+PyAIF navigation model, changes the source-state dimension, and remaps all deep
+temporal source beliefs into the new grid. The trajectory therefore continues
+without discarding accumulated source belief.
 
 The implementation uses
 [PyAIF](https://github.com/Diluna98/python_active_inference) for state and
@@ -124,24 +124,47 @@ Recreate the README animation:
 active-inference-meta-navigation-gif
 ```
 
-During each task update, the adapter measures:
+The integrated example preserves the paper setup:
 
-- KL information gain in the source-location posterior
-- Predictive surprise of the observed RSSI
-- Task state-inference latency
-- Available CPU supplied by the runtime configuration
+- Three-step deep temporal task inference with 10 message-passing iterations
+- 25 cardinal movement policies and 500 policy samples
+- The master-grid RSSI Fisher-information proxy
+- The unweighted, policy-averaged binned RSSI surprise
+- Raw wall-clock latency measured around task state inference only
+- CPU availability computed from the paper's resolution-specific latency baselines
+- Meta-inference every three task updates
+- Online learning of the meta-level prediction-error and latency parameters
 
-The learned latency likelihood came from a different reference platform.
-Consequently, the example records the raw measured latency but applies a
-configurable calibration factor before passing latency to the learned
-meta-generative model. Use `--reference-latency-scale` to calibrate another
-machine.
+There is no artificial latency multiplier. The CPU observation is
+`clip(100 * baseline_latency[resolution] / measured_latency, 0, 100)`, as in
+the experiment code. Absolute latency and therefore the inferred compute state
+depend on the machine and software version. A real deployment should measure
+new baselines and retrain or adapt the latency likelihood for its target
+computer.
 
-Meta-inference is performed every three task updates by default. If it selects
-a different representation, that task action is not executed: the model is
-rebuilt first, its beliefs are remapped, and task inference resumes on the next
-update. Adaptive reconstruction currently supports the navigation package's
-shallow task-inference mode.
+If meta-inference selects a different representation, that task action is not
+executed. The model is rebuilt first, all policy- and time-dependent source
+beliefs are remapped, and task inference resumes on the next update.
+
+## Real-sensor deployment boundary
+
+The task observation and likelihood model are the domain-specific boundary.
+The simulation currently supplies `[x, y, RSSI]` and uses the corresponding
+continuous Gaussian task likelihood. A robot can instead supply task
+observations from its localization and radio sensors and replace or calibrate
+that likelihood model.
+
+The following components should remain unchanged when reproducing the paper
+method in a real setting:
+
+- Deep temporal task inference and policy evaluation
+- Information and prediction-error extraction from the task model
+- The four-observation meta-generative model
+- The three-step meta-inference schedule
+- Belief-preserving representation switching
+
+Sensor preprocessing, observation noise, likelihood parameters, and
+hardware-specific latency baselines should be calibrated from real data.
 
 ## Python API
 
@@ -168,8 +191,8 @@ print(decision.expected_free_energy)
 ```
 
 For sequential operation, call `infer()` repeatedly or use
-`infer_sequence()`. The controller carries posterior beliefs about task context
-and compute state between decisions.
+`infer_sequence()`. The controller performs online updates of its learned
+prediction-error and latency likelihood parameters.
 
 The integrated navigation loop is also available as a Python API:
 

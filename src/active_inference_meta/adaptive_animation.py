@@ -32,6 +32,7 @@ def save_adaptive_navigation_gif(
         model_size=config.navigation.model_size,
         start=(487.5, 487.5),
         goal=(212.5, 312.5),
+        signal_noise=0.05,
         random_seed=config.navigation.random_seed,
     )
     result = run_adaptive_navigation_episode(
@@ -134,7 +135,7 @@ def save_adaptive_navigation_gif(
         indices = np.asarray([item.step for item in history])
         information = np.asarray([item.information_gain_proxy for item in history])
         surprise = np.asarray([item.prediction_error for item in history])
-        latency = np.asarray([item.reference_latency_ms for item in history])
+        latency = np.asarray([item.latency_observation_ms for item in history])
         metrics_axis.plot(indices, information, "o-", label="source information gain")
         metrics_axis.plot(indices, surprise, "o-", label="predictive surprise")
         metrics_axis.set_xlabel("task step")
@@ -145,7 +146,7 @@ def save_adaptive_navigation_gif(
             latency,
             "s--",
             color="#d62728",
-            label="reference latency",
+            label="raw inference latency",
         )
         latency_axis.tick_params(axis="y", colors="#d62728")
         lines = metrics_axis.lines + latency_axis.lines
@@ -156,7 +157,8 @@ def save_adaptive_navigation_gif(
             fontsize=8,
         )
         metrics_axis.set_title(
-            f"Live task metrics | measured inference {step.measured_latency_ms:.2f} ms"
+            f"Paper task metrics | raw inference {step.measured_latency_ms:.2f} ms | "
+            f"CPU availability {step.cpu_availability:.1f}%"
         )
 
         policy_axis.clear()

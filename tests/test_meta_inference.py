@@ -36,6 +36,56 @@ def test_meta_likelihood_modalities_are_finite_and_nonnegative():
         assert np.all(values >= 0.0)
 
 
+def test_meta_preferences_match_paper_utility_equations():
+    likelihood = MetaLikelihood()
+    size = likelihood.grid_size
+    context, prediction_error = np.meshgrid(
+        np.arange(size, dtype=float),
+        np.arange(size, dtype=float),
+        indexing="ij",
+    )
+    context /= size - 1
+    prediction_error /= size - 1
+    gate = 1.0 / (1.0 + np.exp(-6.0 * (context - 0.45)))
+    joint_utility = -(20.0 + 15.0 * gate) * prediction_error
+    joint_probability = np.exp(joint_utility - joint_utility.max())
+    joint_probability /= joint_probability.sum()
+
+    latency = likelihood.get_o_grid(2)
+    latency_utility = -(
+        latency / 800.0
+        + 2.0 * np.clip((latency - 600.0) / 200.0, 0.0, None) ** 2
+    )
+    latency_probability = np.exp(latency_utility - latency_utility.max())
+    latency_probability /= latency_probability.sum()
+
+    assert np.allclose(np.exp(likelihood.log_preferences[(0, 1)]), joint_probability)
+    assert np.allclose(np.exp(likelihood.log_preferences[2]), latency_probability)
+
+
+def test_meta_online_learning_updates_error_and_latency_parameters():
+    likelihood = MetaLikelihood()
+    old_mu_error = likelihood.parameters.mu_err.copy()
+    old_mu_latency = likelihood.parameters.mu_lat.copy()
+    beliefs = (
+        np.array([1.0, 0.0, 0.0, 0.0]),
+        np.array([1.0, 0.0, 0.0, 0.0]),
+        np.array([0.0, 0.0, 1.0]),
+    )
+
+    likelihood.update_from_observation(
+        np.array([0.05, 3.0, 100.0, 87.5]),
+        beliefs,
+    )
+
+    assert likelihood.parameters.mu_err[0, 0] > old_mu_error[0, 0]
+    assert likelihood.parameters.mu_lat[0, 2] != old_mu_latency[0, 2]
+    assert np.array_equal(
+        likelihood.parameters.mu_lat[:1, :2],
+        old_mu_latency[:1, :2],
+    )
+
+
 def test_meta_controller_returns_a_normalized_policy_posterior():
     controller = MetaInferenceController()
     decision = controller.infer(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -25,31 +26,31 @@ class AdaptiveNavigationConfig:
     navigation: NavigationAgentConfig = field(
         default_factory=lambda: NavigationAgentConfig(
             goal_resolution=2,
-            temporal_horizon=1,
-            message_passing_iterations=5,
-            policy_samples=200,
+            temporal_horizon=3,
+            message_passing_iterations=10,
+            policy_samples=500,
+            exact_state_limit=1,
             random_seed=7,
+            paper_compatible_likelihood=True,
         )
     )
     initial_resolution: int = 2
-    maximum_steps: int = 35
+    maximum_steps: int = 18
     meta_interval: int = 3
-    cpu_availability: float = 87.5
-    reference_latency_scale: float = 20.0
 
     def __post_init__(self) -> None:
-        if self.navigation.temporal_horizon != 1:
-            raise ValueError(
-                "Adaptive model reconstruction currently supports shallow task inference only."
-            )
+        if self.navigation.temporal_horizon != 3:
+            raise ValueError("The paper task configuration uses a three-step horizon.")
+        if self.navigation.message_passing_iterations != 10:
+            raise ValueError("The paper task configuration uses 10 message-passing iterations.")
+        if not self.navigation.paper_compatible_likelihood:
+            raise ValueError("The paper-compatible RSSI likelihood must be enabled.")
         if self.initial_resolution not in (2, 5, 10, 20):
             raise ValueError("initial_resolution must be one of 2, 5, 10, or 20.")
         if self.maximum_steps < 1 or self.meta_interval < 1:
             raise ValueError("maximum_steps and meta_interval must be positive.")
-        if not 0.0 <= self.cpu_availability <= 100.0:
-            raise ValueError("cpu_availability must lie between 0 and 100.")
-        if self.reference_latency_scale <= 0:
-            raise ValueError("reference_latency_scale must be positive.")
+        if self.meta_interval != 3:
+            raise ValueError("The paper meta-inference interval is three task steps.")
 
 
 @dataclass(frozen=True)
@@ -66,7 +67,7 @@ class AdaptiveNavigationStep:
     information_gain_proxy: float
     prediction_error: float
     measured_latency_ms: float
-    reference_latency_ms: float
+    latency_observation_ms: float
     cpu_availability: float
     navigation_action: np.ndarray | None
     moved: bool
@@ -99,15 +100,6 @@ class AdaptiveNavigationResult:
         return np.asarray([step.position for step in self.steps], dtype=float)
 
 
-def _overlap_matrix(old_resolution: int, new_resolution: int) -> np.ndarray:
-    old_edges = np.linspace(0.0, 1.0, old_resolution + 1)
-    new_edges = np.linspace(0.0, 1.0, new_resolution + 1)
-    left = np.maximum(new_edges[:-1, None], old_edges[None, :-1])
-    right = np.minimum(new_edges[1:, None], old_edges[None, 1:])
-    overlap = np.maximum(0.0, right - left)
-    return overlap * old_resolution
-
-
 def remap_spatial_belief(
     belief: np.ndarray,
     new_resolution: int,
@@ -131,8 +123,25 @@ def remap_spatial_belief(
         old_resolution,
         old_resolution,
     )
-    overlap = _overlap_matrix(old_resolution, int(new_resolution))
-    new_grid = overlap @ old_grid @ overlap.T
+    if new_resolution % old_resolution == 0:
+        ratio = new_resolution // old_resolution
+        new_grid = np.kron(old_grid, np.ones((ratio, ratio)))
+    elif old_resolution % new_resolution == 0:
+        ratio = old_resolution // new_resolution
+        new_grid = old_grid.reshape(
+            new_resolution,
+            ratio,
+            new_resolution,
+            ratio,
+        ).sum(axis=(1, 3))
+    else:
+        from scipy.ndimage import zoom
+
+        new_grid = zoom(
+            old_grid,
+            zoom=new_resolution / old_resolution,
+            order=1,
+        )
     new_grid = np.maximum(new_grid, 0.0)
     new_grid /= new_grid.sum()
     return new_grid.ravel()
@@ -145,48 +154,167 @@ def rebuild_navigation_agent(
 ):
     """Rebuild a navigation model while preserving its current state beliefs."""
 
-    old_resolution = round(np.sqrt(len(agent.posteriors[2])))
+    old_resolution = round(np.sqrt(agent.states_dim[2]))
     if new_resolution == old_resolution:
         return agent
 
     new_config = replace(config, goal_resolution=int(new_resolution))
     rebuilt = build_navigation_agent(new_config)
-    rebuilt.pD[0] = np.asarray(agent.posteriors[0], dtype=float).copy()
-    rebuilt.pD[1] = np.asarray(agent.posteriors[1], dtype=float).copy()
-    rebuilt.pD[2] = remap_spatial_belief(agent.posteriors[2], new_resolution)
     rebuilt.reset()
+    if agent.deep_inference:
+        for policy_index in range(agent.num_policies):
+            for time_index in range(agent.temporal_horizon):
+                rebuilt.policy_dep_posteriors[
+                    policy_index,
+                    time_index,
+                    0,
+                ] = np.asarray(
+                    agent.policy_dep_posteriors[policy_index, time_index, 0],
+                    dtype=float,
+                ).copy()
+                rebuilt.policy_dep_posteriors[
+                    policy_index,
+                    time_index,
+                    1,
+                ] = np.asarray(
+                    agent.policy_dep_posteriors[policy_index, time_index, 1],
+                    dtype=float,
+                ).copy()
+                rebuilt.policy_dep_posteriors[
+                    policy_index,
+                    time_index,
+                    2,
+                ] = remap_spatial_belief(
+                    agent.policy_dep_posteriors[policy_index, time_index, 2],
+                    new_resolution,
+                )
+        for time_index in range(agent.temporal_horizon):
+            rebuilt.bayesian_mod_avg[time_index, 0] = np.asarray(
+                agent.bayesian_mod_avg[time_index, 0],
+                dtype=float,
+            ).copy()
+            rebuilt.bayesian_mod_avg[time_index, 1] = np.asarray(
+                agent.bayesian_mod_avg[time_index, 1],
+                dtype=float,
+            ).copy()
+            rebuilt.bayesian_mod_avg[time_index, 2] = remap_spatial_belief(
+                agent.bayesian_mod_avg[time_index, 2],
+                new_resolution,
+            )
+        if getattr(agent, "previous_qs_T", None) is not None:
+            rebuilt.previous_qs_T = copy.deepcopy(agent.previous_qs_T)
+            rebuilt.previous_qs_T[2] = remap_spatial_belief(
+                agent.previous_qs_T[2],
+                new_resolution,
+            )
+        rebuilt.observations = copy.deepcopy(agent.observations)
+        rebuilt.planning_from = agent.planning_from
+        rebuilt.planning_to = agent.planning_to
+        for attribute in (
+            "posterior_pi",
+            "prior_pi",
+            "action_posteriors",
+            "action_history",
+            "F_policy",
+            "G_policy",
+            "disparity_nu",
+            "chosen_policy",
+            "expected_obs_chosen",
+            "policy_dep_expected_obs",
+            "risk",
+            "ambiguity",
+            "info_gain",
+            "H_Qo",
+            "beta_posterior",
+            "gamma_previous",
+        ):
+            if hasattr(agent, attribute):
+                setattr(rebuilt, attribute, copy.deepcopy(getattr(agent, attribute)))
+    else:
+        rebuilt.pD[0] = np.asarray(agent.posteriors[0], dtype=float).copy()
+        rebuilt.pD[1] = np.asarray(agent.posteriors[1], dtype=float).copy()
+        rebuilt.pD[2] = remap_spatial_belief(agent.posteriors[2], new_resolution)
+        rebuilt.reset()
     return rebuilt
 
 
-def _source_information_gain(prior: np.ndarray, posterior: np.ndarray) -> float:
-    epsilon = 1e-16
-    prior = np.clip(np.asarray(prior, dtype=float), epsilon, 1.0)
-    posterior = np.clip(np.asarray(posterior, dtype=float), epsilon, 1.0)
-    prior /= prior.sum()
-    posterior /= posterior.sum()
-    return float(np.sum(posterior * np.log(posterior / prior)))
+PAPER_BASELINE_LATENCY_MS = {
+    2: 87.86553494,
+    5: 117.4742106,
+    10: 248.69090593,
+    20: 2655.80495083,
+}
 
 
-def _predictive_signal_surprise(agent, observed_signal: float) -> float:
-    likelihood = agent.likelihood.model
-    signal_density = likelihood.likelihoods(float(observed_signal), 2)
-    q_x, q_y, q_source = (
-        np.asarray(agent.posteriors[factor], dtype=float) for factor in range(3)
+def paper_cpu_availability(resolution: int, inference_latency_ms: float) -> float:
+    """Return the paper's baseline-ratio CPU-availability observation."""
+
+    baseline = PAPER_BASELINE_LATENCY_MS[int(resolution)]
+    availability = 100.0 * baseline / max(float(inference_latency_ms), 1e-16)
+    return float(np.clip(availability, 0.0, 100.0))
+
+
+def paper_policy_averaged_surprise(
+    agent,
+    observation,
+    *,
+    prediction_time_index: int = 0,
+) -> float:
+    """Calculate the exact policy-averaged binned RSSI surprise."""
+
+    predictions = np.stack(
+        [
+            agent.policy_dep_expected_obs[
+                policy_index,
+                prediction_time_index,
+                2,
+            ]
+            for policy_index in range(agent.num_policies)
+        ]
     )
-    predictive_density = float(
-        np.einsum(
-            "i,j,k,ijk->",
-            q_x,
-            q_y,
-            q_source,
-            signal_density,
-            optimize=True,
+    bin_count = predictions.shape[-1]
+    signal = float(np.asarray(observation, dtype=float)[2])
+    observation_index = int(
+        np.clip(signal / 30.0 * bin_count, 0, bin_count - 1)
+    )
+    return float(
+        np.mean(-np.log(predictions[:, observation_index] + 1e-12))
+    )
+
+
+def infer_paper_task_policies(agent, trial: int, time_step: int) -> None:
+    """Apply the paper's deep continuous policy-value equation."""
+
+    agent.infer_policies(trial, time_step)
+    agent.G_policy = np.asarray(
+        -np.asarray(agent.risk, dtype=float)
+        + 0.5 * np.asarray(agent.ambiguity, dtype=float),
+        dtype=object,
+    )
+    agent.update_policy_posterior(trial, time_step)
+
+
+def _source_belief(agent, time_step: int) -> np.ndarray:
+    belief = np.asarray(
+        agent.bayesian_mod_avg[
+            time_step % agent.temporal_horizon,
+            2,
+        ],
+        dtype=float,
+    )
+    if np.all(np.isfinite(belief)) and belief.sum() > 0:
+        return belief / belief.sum()
+    weighted = np.zeros(agent.states_dim[2], dtype=float)
+    for policy_index, probability in enumerate(agent.posterior_pi):
+        weighted += float(probability) * np.asarray(
+            agent.policy_dep_posteriors[
+                policy_index,
+                time_step % agent.temporal_horizon,
+                2,
+            ],
+            dtype=float,
         )
-    )
-    signal_grid = agent.likelihood.get_o_grid(2)
-    bin_width = float(np.mean(np.diff(signal_grid)))
-    predictive_mass = np.clip(predictive_density * bin_width, 1e-16, 1.0)
-    return float(-np.log(predictive_mass))
+    return weighted / weighted.sum()
 
 
 def run_adaptive_navigation_episode(
@@ -194,8 +322,7 @@ def run_adaptive_navigation_episode(
     config: AdaptiveNavigationConfig | None = None,
     environment: GridNavigationEnvironment | None = None,
     meta_controller: MetaInferenceController | None = None,
-    reference_latency: Callable[[float, int], float] | None = None,
-    cpu_availability: Callable[[int], float] | None = None,
+    cpu_availability: Callable[[int, float], float] | None = None,
 ) -> AdaptiveNavigationResult:
     """Run navigation while meta-inference changes the source-state resolution."""
 
@@ -207,6 +334,7 @@ def run_adaptive_navigation_episode(
     if environment is None:
         environment = GridNavigationEnvironment(
             model_size=navigation_config.model_size,
+            signal_noise=0.05,
             random_seed=navigation_config.random_seed,
         )
     if environment.model_size != navigation_config.model_size:
@@ -218,41 +346,31 @@ def run_adaptive_navigation_episode(
     agent.reset()
     observation = environment.reset()
     initial_position = environment.position.copy()
-    local_time = 0
     records = []
     reached_goal = False
 
     for step_index in range(config.maximum_steps):
         inference_resolution = round(np.sqrt(len(agent.pD[2])))
-        source_prior = (
-            np.asarray(agent.D[2], dtype=float).copy()
-            if local_time == 0
-            else np.asarray(agent.posteriors[2], dtype=float).copy()
-        )
-
-        agent.observe(observation, time_step=local_time)
+        agent.observe(observation, time_step=step_index)
         start = time.perf_counter()
-        agent.infer_states()
+        agent.infer_states(0, step_index)
         measured_latency_ms = (time.perf_counter() - start) * 1000.0
-        agent.infer_policies()
+        infer_paper_task_policies(agent, 0, step_index)
         navigation_action = agent.select_action()
 
-        source_posterior = np.asarray(agent.posteriors[2], dtype=float).copy()
-        information_gain = _source_information_gain(source_prior, source_posterior)
-        prediction_error = _predictive_signal_surprise(agent, observation[2])
+        source_posterior = _source_belief(agent, step_index)
+        information_gain = agent.likelihood.model.compute_sensitivity(observation)
+        prediction_error = paper_policy_averaged_surprise(agent, observation)
         available_cpu = float(
-            cpu_availability(step_index)
+            cpu_availability(inference_resolution, measured_latency_ms)
             if cpu_availability is not None
-            else config.cpu_availability
+            else paper_cpu_availability(
+                inference_resolution,
+                measured_latency_ms,
+            )
         )
         if not 0.0 <= available_cpu <= 100.0:
             raise ValueError("CPU availability observations must lie between 0 and 100.")
-        reference_latency_ms = float(
-            reference_latency(measured_latency_ms, inference_resolution)
-            if reference_latency is not None
-            else measured_latency_ms * config.reference_latency_scale
-        )
-
         decision = None
         active_resolution = inference_resolution
         moved = False
@@ -263,7 +381,7 @@ def run_adaptive_navigation_episode(
                 MetaObservation(
                     information_gain_proxy=min(information_gain, 2.0),
                     prediction_error=prediction_error,
-                    inference_latency_ms=reference_latency_ms,
+                    inference_latency_ms=measured_latency_ms,
                     cpu_availability=available_cpu,
                 ),
             )
@@ -278,29 +396,30 @@ def run_adaptive_navigation_episode(
                     navigation_config,
                     goal_resolution=active_resolution,
                 )
-                source_posterior = np.asarray(agent.D[2], dtype=float).copy()
-                local_time = 0
+                source_posterior = _source_belief(agent, step_index)
 
-        if decision is None or not decision.switched:
-            if navigation_action is not None:
-                recorded_action = np.asarray(navigation_action[:2], dtype=int)
-                observation, reached_goal = environment.step(recorded_action)
-                moved = True
-            local_time += 1
+        if (
+            (decision is None or not decision.switched)
+            and navigation_action is not None
+        ):
+            recorded_action = np.asarray(navigation_action[:2], dtype=int)
+            observation, reached_goal = environment.step(recorded_action)
+            moved = True
 
+        recorded_rssi = float(observation[2])
         records.append(
             AdaptiveNavigationStep(
                 step=step_index,
                 position=environment.position.copy(),
                 distance=environment.distance_to_goal(),
-                rssi=float(environment.observe()[2]),
+                rssi=recorded_rssi,
                 inference_resolution=inference_resolution,
                 active_resolution=active_resolution,
                 source_belief=source_posterior,
                 information_gain_proxy=information_gain,
                 prediction_error=prediction_error,
                 measured_latency_ms=measured_latency_ms,
-                reference_latency_ms=reference_latency_ms,
+                latency_observation_ms=measured_latency_ms,
                 cpu_availability=available_cpu,
                 navigation_action=recorded_action,
                 moved=moved,
@@ -309,6 +428,13 @@ def run_adaptive_navigation_episode(
         )
         if reached_goal:
             break
+        if decision is not None and decision.switched:
+            continue
+        if step_index % config.navigation.temporal_horizon == (
+            config.navigation.temporal_horizon - 1
+        ):
+            agent.initialize_variables()
+        agent.step_time(step_index)
 
     return AdaptiveNavigationResult(
         steps=tuple(records),
@@ -322,10 +448,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run RSSI navigation with live meta-inference model selection."
     )
-    parser.add_argument("--steps", type=int, default=35)
+    parser.add_argument("--steps", type=int, default=18)
     parser.add_argument("--meta-interval", type=int, default=3)
     parser.add_argument("--initial-resolution", type=int, default=2)
-    parser.add_argument("--reference-latency-scale", type=float, default=20.0)
     parser.add_argument("--seed", type=int, default=7)
     return parser
 
@@ -335,15 +460,16 @@ def main() -> None:
     config = AdaptiveNavigationConfig(
         navigation=NavigationAgentConfig(
             goal_resolution=args.initial_resolution,
-            temporal_horizon=1,
-            message_passing_iterations=5,
-            policy_samples=200,
+            temporal_horizon=3,
+            message_passing_iterations=10,
+            policy_samples=500,
+            exact_state_limit=1,
             random_seed=args.seed,
+            paper_compatible_likelihood=True,
         ),
         initial_resolution=args.initial_resolution,
         maximum_steps=args.steps,
         meta_interval=args.meta_interval,
-        reference_latency_scale=args.reference_latency_scale,
     )
     result = run_adaptive_navigation_episode(config=config)
     print(f"model resolutions: {result.resolutions.tolist()}")

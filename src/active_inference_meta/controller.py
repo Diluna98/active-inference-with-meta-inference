@@ -90,6 +90,9 @@ class MetaInferenceController:
             self.likelihood_model,
             modality_dependencies=self.likelihood_model.modality_dependencies,
             grid_size=self.likelihood_model.grid_size,
+            parameter_information_gain_fn=(
+                self.likelihood_model.parameter_information_gain
+            ),
             policy_samples=self.config.policy_samples,
             exact_state_limit=self.config.exact_state_limit,
             random_seed=self.config.random_seed,
@@ -102,17 +105,16 @@ class MetaInferenceController:
                 policy_workers=self.config.policy_workers,
             ),
             action_selection="deterministic",
+            learning_A=True,
+            learning_rate=0.1,
+            forgeting_rate=0.95,
         )
-        self._context_prior = np.full(4, 0.25, dtype=float)
-        self._compute_prior = np.full(3, 1.0 / 3.0, dtype=float)
 
     def reset(self) -> None:
-        """Reset accumulated meta-level context and compute beliefs."""
+        """Reset transient meta-level beliefs without discarding learned parameters."""
 
-        self._context_prior = np.full(4, 0.25, dtype=float)
-        self._compute_prior = np.full(3, 1.0 / 3.0, dtype=float)
-        self.agent.pD[1] = self._context_prior.copy()
-        self.agent.pD[2] = self._compute_prior.copy()
+        self.agent.pD[1] = np.full(4, 0.25, dtype=float)
+        self.agent.pD[2] = np.full(3, 1.0 / 3.0, dtype=float)
         self.agent.reset()
 
     def infer(
@@ -132,8 +134,8 @@ class MetaInferenceController:
         resolution_prior = np.zeros(4, dtype=float)
         resolution_prior[current_index] = 1.0
         self.agent.pD[0] = resolution_prior.copy()
-        self.agent.pD[1] = self._context_prior.copy()
-        self.agent.pD[2] = self._compute_prior.copy()
+        self.agent.pD[1] = np.full(4, 0.25, dtype=float)
+        self.agent.pD[2] = np.full(3, 1.0 / 3.0, dtype=float)
         self.agent.reset()
         self.agent.observe(observation.as_array())
         self.agent.infer_states()
@@ -142,15 +144,13 @@ class MetaInferenceController:
         if action is None:
             raise RuntimeError("The meta-inference agent did not select an action.")
 
-        self._context_prior = np.asarray(self.agent.posteriors[1], dtype=float).copy()
-        self._compute_prior = np.asarray(self.agent.posteriors[2], dtype=float).copy()
         action_index = int(action[0])
         selected_resolution = (
             current_resolution
             if action_index == self.KEEP_ACTION
             else self.config.resolutions[action_index]
         )
-        return MetaDecision(
+        decision = MetaDecision(
             action_index=action_index,
             selected_resolution=int(selected_resolution),
             switched=int(selected_resolution) != int(current_resolution),
@@ -163,6 +163,11 @@ class MetaInferenceController:
                 for posterior in self.agent.posteriors
             ),
         )
+        self.likelihood_model.update_from_observation(
+            observation.as_array(),
+            self.agent.posteriors,
+        )
+        return decision
 
     def infer_sequence(
         self,
