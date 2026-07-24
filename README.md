@@ -3,21 +3,22 @@
 [![CI](https://github.com/Diluna98/active-inference-with-meta-inference/actions/workflows/ci.yml/badge.svg)](https://github.com/Diluna98/active-inference-with-meta-inference/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A hierarchical active-inference implementation that selects the computational
-representation used by a task-level agent. The meta-level agent balances task
-uncertainty and prediction quality against inference latency and available
-compute.
+A hierarchical active-inference implementation for adaptive computational
+model selection. A task-level agent performs continuous-observation RSSI
+navigation, while a meta-level agent selects the spatial resolution of the
+task agent's source-location representation.
 
 ![Live navigation with meta-inference rebuilding the source model](docs/results/adaptive_meta_navigation.gif)
 
-The animation runs the continuous RSSI task from
+The animation runs the simulated continuous RSSI task from
 [Active-Inference Navigation Agent](https://github.com/Diluna98/active-inference-navigation-agent)
-using the task and meta-inference procedure used for the paper experiments.
+with the algorithmic configuration used for the paper experiments.
 The task agent begins with a `2×2` source representation. Meta-inference
-selects resolutions from live task evidence. Every accepted switch rebuilds the
-PyAIF navigation model, changes the source-state dimension, and remaps all deep
-temporal source beliefs into the new grid. The trajectory therefore continues
-without discarding accumulated source belief.
+selects among `2×2`, `5×5`, `10×10`, and `20×20` representations from
+task-level evidence and computational measurements. Every accepted switch
+rebuilds the PyAIF navigation model, changes the source-state dimension, and
+remaps the full deep temporal source belief into the new grid. Navigation
+therefore continues without resetting the accumulated source belief.
 
 The implementation uses
 [PyAIF](https://github.com/Diluna98/python_active_inference) for state and
@@ -26,15 +27,15 @@ policy inference.
 ## Architecture
 
 ```text
-task observations
+continuous task observations [x, y, RSSI]
       │
       ▼
 task-level active-inference agent
       │
-      ├── information-gain proxy
-      ├── prediction error
-      ├── inference latency
-      └── CPU availability
+      ├── RSSI Fisher-information proxy
+      ├── policy-averaged RSSI surprise
+      ├── state-inference latency
+      └── baseline-ratio compute availability
                 │
                 ▼
       meta-inference agent
@@ -55,12 +56,13 @@ compute state  ∈ {low, medium, high}
 Its four continuous observation modalities are:
 
 ```text
-[information-gain proxy, prediction error, latency in ms, CPU availability]
+[RSSI information proxy, predictive surprise, latency in ms, compute availability]
 ```
 
 Actions `0–3` select one of the four representations. Action `4` keeps the
 current representation. Policy inference evaluates the expected free energy of
-these alternatives using learned prediction-error and latency likelihoods.
+these alternatives using likelihoods over task context, representation,
+latency, and compute state.
 
 ## Installation
 
@@ -110,9 +112,14 @@ Each trace record has this structure:
 }
 ```
 
-## Run adaptive RSSI navigation
+These field names are retained for API compatibility. In this implementation,
+`information_gain_proxy` is the RSSI Fisher-information proxy,
+`prediction_error` is policy-averaged predictive surprise, and
+`cpu_availability` is the baseline-ratio compute-availability proxy.
 
-Run the real task/meta-agent loop:
+## Run the adaptive RSSI simulation
+
+Run the integrated task/meta-agent simulation:
 
 ```bash
 active-inference-meta-navigation
@@ -124,47 +131,67 @@ Recreate the README animation:
 active-inference-meta-navigation-gif
 ```
 
-The integrated example preserves the paper setup:
+## Paper-compatible configuration
+
+The integrated simulation reproduces the paper's algorithmic setup:
 
 - Three-step deep temporal task inference with 10 message-passing iterations
 - 25 cardinal movement policies and 500 policy samples
 - The master-grid RSSI Fisher-information proxy
 - The unweighted, policy-averaged binned RSSI surprise
 - Raw wall-clock latency measured around task state inference only
-- CPU availability computed from the paper's resolution-specific latency baselines
+- Compute availability derived from the paper's resolution-specific latency baselines
 - Meta-inference every three task updates
 - Online learning of the meta-level prediction-error and latency parameters
 
-There is no artificial latency multiplier. The CPU observation is
-`clip(100 * baseline_latency[resolution] / measured_latency, 0, 100)`, as in
-the experiment code. Absolute latency and therefore the inferred compute state
-depend on the machine and software version. A real deployment should measure
-new baselines and retrain or adapt the latency likelihood for its target
-computer.
+The RSSI information proxy is the likelihood-weighted spatial Fisher
+sensitivity of the fixed `20×20` reference signal model. Predictive surprise is
+the mean negative log probability of the observed RSSI bin across task
+policies; it is not weighted by the task policy posterior.
+
+There is no artificial latency multiplier. The compute-availability
+observation is:
+
+```text
+clip(100 × baseline_latency[resolution] / measured_latency, 0, 100)
+```
+
+This is a baseline-ratio proxy, not a direct operating-system CPU-utilization
+measurement. Absolute latency and therefore the inferred compute state depend
+on the processor, operating-system load, Python runtime, and PyAIF version.
+Reproducing the algorithm does not imply bit-for-bit identical trajectories or
+wall-clock measurements.
 
 If meta-inference selects a different representation, that task action is not
 executed. The model is rebuilt first, all policy- and time-dependent source
-beliefs are remapped, and task inference resumes on the next update.
+beliefs and policy predictions are preserved, and task inference resumes on
+the next update.
 
-## Real-sensor deployment boundary
+## Adapting the pipeline to real sensors
 
-The task observation and likelihood model are the domain-specific boundary.
-The simulation currently supplies `[x, y, RSSI]` and uses the corresponding
-continuous Gaussian task likelihood. A robot can instead supply task
-observations from its localization and radio sensors and replace or calibrate
-that likelihood model.
+The paper-compatible simulation supplies task observations in the form
+`[x, y, RSSI]` and uses a continuous Gaussian likelihood for those
+observations. In a real deployment, these values will come from the robot's
+localization system and radio receiver.
 
-The following components should remain unchanged when reproducing the paper
-method in a real setting:
+If the real system retains the same observation semantics, the task likelihood
+should be calibrated using real sensor data: coordinate uncertainty, RSSI
+noise, signal decay, workspace geometry, and receiver-dependent scaling. If
+the observation modalities change, the likelihood dependencies and the
+task-level information and surprise calculations must change with them.
+
+The remainder of the hierarchy can retain the paper procedure:
 
 - Deep temporal task inference and policy evaluation
-- Information and prediction-error extraction from the task model
+- Task-metric extraction from the calibrated likelihood model
 - The four-observation meta-generative model
 - The three-step meta-inference schedule
 - Belief-preserving representation switching
 
-Sensor preprocessing, observation noise, likelihood parameters, and
-hardware-specific latency baselines should be calibrated from real data.
+The target computer also requires new latency baselines and, preferably,
+retraining or online adaptation of the meta-level latency likelihood. The
+paper baselines describe the experimental platform; they are retained here for
+paper-compatible simulation, not presented as universal hardware constants.
 
 ## Python API
 
@@ -214,10 +241,10 @@ print(result.switch_steps)
 
 The packaged parameters define:
 
-- A Gaussian likelihood for the information-gain proxy conditioned on context
-- A Student-t predictive likelihood for error conditioned on representation and context
+- A Gaussian likelihood for the RSSI Fisher-information proxy conditioned on context
+- A Student-t likelihood for predictive surprise conditioned on representation and context
 - A Gaussian latency likelihood conditioned on representation and compute state
-- A Gaussian CPU likelihood conditioned on compute state
+- A Gaussian compute-availability likelihood conditioned on compute state
 
 The learned parameter tables are stored in
 `src/active_inference_meta/data/meta_likelihood_parameters.json`.
