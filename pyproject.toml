@@ -31,7 +31,7 @@ dependencies = [
   "numpy>=1.24",
   "pillow>=10.0",
   "scipy>=1.10",
-  "pyaif-toolkit @ https://github.com/Diluna98/python_active_inference/archive/refs/heads/codex/continuous-observations-v0.2.zip",
+  "pyaif-toolkit>=0.2,<0.3",
 ]
 
 [project.scripts]
