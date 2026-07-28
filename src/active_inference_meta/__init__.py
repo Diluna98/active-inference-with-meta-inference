@@ -24,6 +24,7 @@ from .models import (
 )
 from .observations import MetaDecision, MetaObservationBuilder
 from .policy import AdaptiveNavigationPolicy
+from .runtime import run_adaptive_simulation_runtime
 
 __all__ = [
     "AdaptiveNavigationConfig",
@@ -51,5 +52,6 @@ __all__ = [
     "rebuild_navigation_agent",
     "remap_spatial_belief",
     "run_adaptive_navigation_episode",
+    "run_adaptive_simulation_runtime",
     "run_meta_trace",
 ]

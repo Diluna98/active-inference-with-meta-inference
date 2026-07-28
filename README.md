@@ -210,6 +210,71 @@ print(result.resolutions)
 print(result.switch_steps)
 ```
 
+## Run on the TurtleBot
+
+The real-world command composes the hardware-independent adaptive policy with
+the ROS observation and TurtleBot actuator adapters supplied by
+`active-inference-navigation-agent`:
+
+```text
+/tb4_08/odom + /tb4_08/rssi
+              |
+              v
+      adaptive navigation policy <--- processor availability (psutil)
+              |
+              v
+       NavigationAction
+              |
+              v
+      TurtleBotActionExecutor ---> /tb4_08/cmd_vel
+```
+
+ROS, TurtleBot, and `Twist` types are imported only by the composition module.
+The task and meta-inference controllers remain usable without ROS.
+
+On the Ubuntu computer that will run inference:
+
+```bash
+source /opt/ros/humble/setup.bash
+cd ~/active-inference-with-meta-inference
+source .venv/bin/activate
+python -m pip install -e .
+
+active-inference-meta-ros --planning-windows 20
+```
+
+The packaged configuration uses:
+
+- a 7 m by 7 m arena and 20 by 20 movement grid;
+- a 10 by 10 initial source representation;
+- candidate representations 2 by 2, 5 by 5, 10 by 10, and 20 by 20;
+- arena positive x from odometry negative y and arena positive y from
+  odometry positive x;
+- `/tb4_08/odom`, `/tb4_08/rssi`, and `/tb4_08/cmd_vel`;
+- a five-sample RSSI median and five-sample CPU-availability median;
+- the calibrated dBm likelihood and persistent `-62 dBm` termination rule.
+
+CPU availability is measured on the processor running the command. It is
+reported as a percentage (`100 - CPU utilization`) and remains separate from
+the task observation `[x, y, RSSI]`. Replace `ComputeResourceSource` if
+inference later runs on a different computer or availability arrives over a
+ROS topic.
+
+Before each physical trial:
+
+1. Clear the arena and ensure the emergency stop is accessible.
+2. Place the robot at the centre of the configured start cell.
+3. Establish repeatable odometry; with the packaged frame configuration,
+   odometry `(0, 0)` at the start-cell centre maps to arena `(0.175, 0.175)`.
+4. Verify that odometry and RSSI topics are publishing current values.
+5. First test `stay`, positive x, and positive y using the navigation-agent
+   actuator-test command.
+6. Start adaptive navigation only after confirming the axis mapping and arena
+   boundaries.
+
+The executor performs closed-loop odometry motion without Nav2 or SLAM and
+publishes a stop command on completion, errors, or shutdown.
+
 ## Learned meta-likelihood
 
 The packaged parameters define:

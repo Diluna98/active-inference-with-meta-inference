@@ -1,0 +1,56 @@
+grid:
+  columns: 20
+  rows: 20
+  width: 7.0
+  height: 7.0
+  origin_x: 0.0
+  origin_y: 0.0
+frame:
+  arena_x_from_odom: "-y"
+  arena_y_from_odom: "+x"
+  odom_zero_arena_x: 0.175
+  odom_zero_arena_y: 0.175
+topics:
+  odom: /tb4_08/odom
+  rssi: /tb4_08/rssi
+  cmd_vel: /tb4_08/cmd_vel
+sensors:
+  rssi_median_window: 5
+  odom_timeout: 1.0
+  rssi_timeout: 1.0
+motion:
+  linear_speed: 0.15
+  angular_speed: 0.3
+  position_tolerance: 0.02
+  yaw_tolerance: 0.03
+  control_period: 0.05
+  action_timeout: 30.0
+active_inference:
+  goal_resolution: 10
+  temporal_horizon: 3
+  message_passing_iterations: 10
+  policy_samples: 500
+  exact_state_limit: 1
+  random_seed: 7
+  policy_workers: 1
+  normalized_signal_preference: true
+meta_inference:
+  initial_resolution: 10
+  candidate_resolutions: [2, 5, 10, 20]
+  meta_interval: 3
+compute:
+  provider: psutil
+  median_window: 5
+  timeout_seconds: 2.0
+termination:
+  provider: persistent_rssi
+  rssi_threshold: -62.0
+  consecutive_observations: 3
+likelihood_provider: calibrated_dbm
+rssi_likelihood:
+  reference_rssi: -63.02
+  path_loss_exponent: 1.635
+  signal_sigma: 3.37
+  minimum_calibrated_distance: 1.0
+  minimum_rssi: -95.0
+  maximum_rssi: -55.0

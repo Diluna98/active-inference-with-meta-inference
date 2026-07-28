@@ -39,6 +39,7 @@ dependencies = [
 active-inference-meta = "active_inference_meta.cli:main"
 active-inference-meta-navigation = "active_inference_meta.adaptive_navigation:main"
 active-inference-meta-navigation-gif = "active_inference_meta.adaptive_animation:main"
+active-inference-meta-ros = "active_inference_meta.ros_runtime:main"
 
 [project.optional-dependencies]
 dev = [
@@ -56,7 +57,7 @@ Issues = "https://github.com/Diluna98/active-inference-with-meta-inference/issue
 where = ["src"]
 
 [tool.setuptools.package-data]
-active_inference_meta = ["data/*.json"]
+active_inference_meta = ["data/*.json", "resources/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
