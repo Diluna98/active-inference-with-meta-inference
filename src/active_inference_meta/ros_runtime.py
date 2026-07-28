@@ -72,7 +72,18 @@ def build_adaptive_policy(config: MetaRuntimeConfig) -> AdaptiveNavigationPolicy
             meta_interval=adaptive.meta_interval,
         ),
         meta_controller=MetaInferenceController(
-            MetaInferenceConfig(resolutions=adaptive.candidate_resolutions)
+            MetaInferenceConfig(
+                resolutions=adaptive.candidate_resolutions,
+                message_passing_iterations=config.meta_agent.message_passing_iterations,
+                policy_samples=config.meta_agent.policy_samples,
+                exact_state_limit=config.meta_agent.exact_state_limit,
+                random_seed=config.meta_agent.random_seed,
+                policy_workers=config.meta_agent.policy_workers,
+                learning_A=config.meta_agent.learning_A,
+                learning_rate=config.meta_agent.learning_rate,
+                forgetting_rate=config.meta_agent.forgetting_rate,
+            ),
+            parameters=config.meta_likelihood,
         ),
     )
 

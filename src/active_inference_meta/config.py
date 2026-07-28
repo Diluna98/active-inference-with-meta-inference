@@ -21,6 +21,9 @@ from active_inference_navigation.config import (
     TopicConfig,
 )
 
+from .controller import MetaInferenceConfig
+from .likelihood import MetaLikelihoodParameters
+
 
 @dataclass(frozen=True)
 class ComputeConfig:
@@ -61,6 +64,10 @@ class MetaRuntimeConfig:
     navigation: NavigationConfig = field(default_factory=NavigationConfig)
     adaptive: AdaptiveConfig = field(default_factory=AdaptiveConfig)
     compute: ComputeConfig = field(default_factory=ComputeConfig)
+    meta_agent: MetaInferenceConfig = field(default_factory=MetaInferenceConfig)
+    meta_likelihood: MetaLikelihoodParameters = field(
+        default_factory=MetaLikelihoodParameters.from_json
+    )
 
 
 def _section(data: dict[str, Any], key: str) -> dict[str, Any]:
@@ -94,6 +101,12 @@ def _parse(data: Any) -> MetaRuntimeConfig:
         navigation=navigation,
         adaptive=AdaptiveConfig(**adaptive_data),
         compute=ComputeConfig(**_section(data, "compute")),
+        meta_agent=MetaInferenceConfig(**_section(data, "meta_agent")),
+        meta_likelihood=(
+            MetaLikelihoodParameters.from_mapping(_section(data, "meta_likelihood"))
+            if "meta_likelihood" in data
+            else MetaLikelihoodParameters.from_json()
+        ),
     )
 
 

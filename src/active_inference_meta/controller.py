@@ -46,12 +46,19 @@ class MetaInferenceConfig:
     exact_state_limit: int = 4096
     random_seed: int = 0
     policy_workers: int = 1
+    learning_A: bool = True
+    learning_rate: float = 0.1
+    forgetting_rate: float = 0.95
 
     def __post_init__(self) -> None:
         if len(self.resolutions) != 4 or len(set(self.resolutions)) != 4:
             raise ValueError("Exactly four distinct resolutions are required.")
         if any(resolution < 1 for resolution in self.resolutions):
             raise ValueError("Resolutions must be positive.")
+        if not 0.0 < self.learning_rate <= 1.0:
+            raise ValueError("learning_rate must be in (0, 1].")
+        if not 0.0 <= self.forgetting_rate <= 1.0:
+            raise ValueError("forgetting_rate must be in [0, 1].")
 
 
 class MetaInferenceController:
@@ -105,9 +112,9 @@ class MetaInferenceController:
                 policy_workers=self.config.policy_workers,
             ),
             action_selection="deterministic",
-            learning_A=True,
-            learning_rate=0.1,
-            forgeting_rate=0.95,
+            learning_A=self.config.learning_A,
+            learning_rate=self.config.learning_rate,
+            forgeting_rate=self.config.forgetting_rate,
         )
 
     def reset(self) -> None:
@@ -163,10 +170,12 @@ class MetaInferenceController:
                 for posterior in self.agent.posteriors
             ),
         )
-        self.likelihood_model.update_from_observation(
-            observation.as_array(),
-            self.agent.posteriors,
-        )
+        if self.config.learning_A:
+            self.likelihood_model.update_from_observation(
+                observation.as_array(),
+                self.agent.posteriors,
+                learning_rate=self.config.learning_rate,
+            )
         return decision
 
     def infer_sequence(

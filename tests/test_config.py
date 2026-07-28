@@ -16,12 +16,20 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.navigation.topics.cmd_vel == "/tb4_08/cmd_vel"
     assert config.adaptive.candidate_resolutions == (2, 5, 10, 20)
     assert config.compute.provider == "psutil"
+    assert config.navigation.active_inference.temporal_horizon == 3
+    assert config.meta_agent.learning_A is True
+    assert config.meta_agent.learning_rate == 0.1
+    assert config.meta_likelihood.mu_err.shape == (4, 4)
+    assert config.meta_likelihood.mu_cpu.tolist() == [20.0, 57.5, 87.5]
 
 
 def test_policy_building_does_not_require_ros_imports():
-    policy = build_adaptive_policy(load_default_meta_runtime_config())
+    config = load_default_meta_runtime_config()
+    policy = build_adaptive_policy(config)
 
     assert policy.active_resolution == 10
+    assert policy.meta_controller.config.learning_A is True
+    assert policy.meta_controller.likelihood_model.parameters is config.meta_likelihood
     assert build_parser().parse_args([]).planning_windows == 20
 
 

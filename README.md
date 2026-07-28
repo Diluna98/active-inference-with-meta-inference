@@ -252,6 +252,8 @@ The packaged configuration uses:
   odometry positive x;
 - `/tb4_08/odom`, `/tb4_08/rssi`, and `/tb4_08/cmd_vel`;
 - a five-sample RSSI median and five-sample CPU-availability median;
+- a three-step temporal horizon for task-level Active Inference;
+- meta-likelihood learning enabled with `learning_A: true`;
 - the calibrated dBm likelihood and persistent `-62 dBm` termination rule.
 
 CPU availability is measured on the processor running the command. It is
@@ -284,8 +286,21 @@ The packaged parameters define:
 - A Gaussian latency likelihood conditioned on representation and compute state
 - A Gaussian compute-availability likelihood conditioned on compute state
 
-The learned parameter tables are stored in
-`src/active_inference_meta/data/meta_likelihood_parameters.json`.
+All initial meta-likelihood priors are configurable under `meta_likelihood` in
+`src/active_inference_meta/resources/meta_navigation.yaml`. This includes the
+information, prediction-error, latency, and CPU means/scales. Meta-level
+learning is configured separately under `meta_agent`:
+
+```yaml
+meta_agent:
+  learning_A: true
+  learning_rate: 0.1
+  forgetting_rate: 0.95
+```
+
+Set `learning_A: false` for a fixed likelihood. The legacy packaged JSON
+parameter file remains supported by `MetaLikelihoodParameters.from_json()` for
+backward compatibility, but the TurtleBot composition uses the YAML priors.
 
 ## Development
 

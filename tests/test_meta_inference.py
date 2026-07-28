@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from active_inference_meta import (
+    MetaInferenceConfig,
     MetaInferenceController,
     MetaLikelihood,
     MetaLikelihoodParameters,
@@ -100,6 +101,17 @@ def test_meta_controller_returns_a_normalized_policy_posterior():
     assert np.all(np.isfinite(decision.expected_free_energy))
     assert np.all(np.isfinite(decision.risk))
     assert np.all(np.isfinite(decision.ambiguity))
+
+
+def test_meta_likelihood_learning_can_be_disabled():
+    controller = MetaInferenceController(MetaInferenceConfig(learning_A=False))
+    old_mu_error = controller.likelihood_model.parameters.mu_err.copy()
+    old_mu_latency = controller.likelihood_model.parameters.mu_lat.copy()
+
+    controller.infer(2, MetaObservation(0.05, 3.0, 100.0, 87.5))
+
+    assert np.array_equal(controller.likelihood_model.parameters.mu_err, old_mu_error)
+    assert np.array_equal(controller.likelihood_model.parameters.mu_lat, old_mu_latency)
 
 
 def test_packaged_trace_runs_sequential_meta_inference():
