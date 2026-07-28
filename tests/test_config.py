@@ -1,7 +1,10 @@
 import pytest
 
 from active_inference_meta.config import (
+    AdaptiveConfig,
     ComputeConfig,
+    MetaRuntimeConfig,
+    ProfilingConfig,
     load_default_meta_runtime_config,
 )
 from active_inference_meta.ros_runtime import build_adaptive_policy, build_parser
@@ -21,6 +24,8 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.meta_agent.learning_rate == 0.1
     assert config.meta_likelihood.mu_err.shape == (4, 4)
     assert config.meta_likelihood.mu_cpu.tolist() == [20.0, 57.5, 87.5]
+    assert config.adaptive.enabled is True
+    assert config.profiling.enabled is False
 
 
 def test_policy_building_does_not_require_ros_imports():
@@ -36,3 +41,15 @@ def test_policy_building_does_not_require_ros_imports():
 def test_invalid_compute_configuration_is_rejected():
     with pytest.raises(ValueError, match="provider"):
         ComputeConfig(provider="unknown")
+
+
+def test_profiling_requires_fixed_resolution_mode():
+    with pytest.raises(ValueError, match="requires"):
+        MetaRuntimeConfig(profiling=ProfilingConfig(enabled=True))
+
+    config = MetaRuntimeConfig(
+        adaptive=AdaptiveConfig(enabled=False, fixed_resolution=5),
+        profiling=ProfilingConfig(enabled=True),
+    )
+
+    assert config.adaptive.task_resolution == 5

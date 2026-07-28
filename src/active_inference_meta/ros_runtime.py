@@ -32,9 +32,14 @@ from .config import (
 )
 from .controller import MetaInferenceConfig, MetaInferenceController
 from .policy import AdaptiveNavigationPolicy
+from .profiling import CsvMetaObservationLogger
 
 
-def build_adaptive_policy(config: MetaRuntimeConfig) -> AdaptiveNavigationPolicy:
+def build_adaptive_policy(
+    config: MetaRuntimeConfig,
+    *,
+    observation_sink=None,
+) -> AdaptiveNavigationPolicy:
     """Build the technology-neutral policy from typed configuration."""
 
     nav = config.navigation
@@ -45,7 +50,7 @@ def build_adaptive_policy(config: MetaRuntimeConfig) -> AdaptiveNavigationPolicy
         model_rows=nav.grid.rows,
         workspace_size=nav.grid.width,
         workspace_height=nav.grid.height,
-        goal_resolution=adaptive.initial_resolution,
+        goal_resolution=adaptive.task_resolution,
         temporal_horizon=inference.temporal_horizon,
         message_passing_iterations=inference.message_passing_iterations,
         policy_samples=inference.policy_samples,
@@ -68,7 +73,7 @@ def build_adaptive_policy(config: MetaRuntimeConfig) -> AdaptiveNavigationPolicy
         ),
         config=AdaptiveNavigationConfig(
             navigation=navigation_config,
-            initial_resolution=adaptive.initial_resolution,
+            initial_resolution=adaptive.task_resolution,
             meta_interval=adaptive.meta_interval,
         ),
         meta_controller=MetaInferenceController(
@@ -85,6 +90,8 @@ def build_adaptive_policy(config: MetaRuntimeConfig) -> AdaptiveNavigationPolicy
             ),
             parameters=config.meta_likelihood,
         ),
+        meta_inference_enabled=adaptive.enabled,
+        observation_sink=observation_sink,
     )
 
 
@@ -138,8 +145,18 @@ def run_ros_meta_navigation(
         action_timeout=nav.motion.action_timeout,
         shutdown_requested=lambda: not rclpy.ok(),
     )
+    profile_logger = (
+        CsvMetaObservationLogger(config.profiling.output)
+        if config.profiling.enabled
+        else None
+    )
     runtime = NavigationRuntime(
-        agent=build_adaptive_policy(config),
+        agent=build_adaptive_policy(
+            config,
+            observation_sink=(
+                profile_logger.record if profile_logger is not None else None
+            ),
+        ),
         observation_source=source,
         action_executor=actuator,
         termination_condition=build_termination_condition(nav),
@@ -159,6 +176,8 @@ def run_ros_meta_navigation(
         return runtime.run(planning_windows=planning_windows)
     finally:
         actuator.stop()
+        if profile_logger is not None:
+            profile_logger.close()
         _ = subscriptions
 
 

@@ -277,6 +277,45 @@ Before each physical trial:
 The executor performs closed-loop odometry motion without Nav2 or SLAM and
 publishes a stop command on completion, errors, or shutdown.
 
+## Collect fixed-resolution profiling data
+
+Use this repository—not the navigation-agent repository—to collect the four
+signals needed to fit the meta likelihood. Copy the packaged YAML to a separate
+file such as `profile_2x2.yaml`, then change these sections:
+
+```yaml
+meta_inference:
+  enabled: false
+  initial_resolution: 10
+  fixed_resolution: 2
+  candidate_resolutions: [2, 5, 10, 20]
+  meta_interval: 3
+
+profiling:
+  enabled: true
+  output: meta_profile_2x2.csv
+```
+
+Run the physical experiment normally:
+
+```bash
+active-inference-meta-ros \
+  --config profile_2x2.yaml \
+  --planning-windows 20
+```
+
+With meta-inference disabled, the task agent stays at `fixed_resolution`;
+resolution selection and meta-likelihood learning are not executed. Every task
+inference step is immediately appended and flushed to CSV with:
+
+```text
+step,resolution,information_gain_proxy,prediction_error,inference_latency_ms,cpu_availability
+```
+
+Repeat with fixed resolutions `2`, `5`, `10`, and `20`, using a different
+output filename for each run. Existing non-empty output files are appended, so
+use a new filename when trials must remain separate.
+
 ## Learned meta-likelihood
 
 The packaged parameters define:

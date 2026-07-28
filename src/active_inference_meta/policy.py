@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field, replace
 from time import perf_counter
 from typing import Any
@@ -36,6 +36,8 @@ class AdaptiveNavigationPolicy:
     compute_source: ComputeResourceSource
     config: AdaptiveNavigationConfig = field(default_factory=AdaptiveNavigationConfig)
     meta_controller: MetaInferenceController = field(default_factory=MetaInferenceController)
+    meta_inference_enabled: bool = True
+    observation_sink: Callable[[int, int, MetaObservation], None] | None = None
     clock: Any = perf_counter
     _agent: Any = field(init=False, repr=False)
     _navigation_config: Any = field(init=False, repr=False)
@@ -112,9 +114,17 @@ class AdaptiveNavigationPolicy:
         selected = self._agent.select_action(allowed_actions)
         self._last_decision = None
 
-        if self._time_step % self.config.meta_interval == 0:
-            metrics = self._task_metrics()
-            meta_observation = MetaObservationBuilder(self.compute_source).build(metrics)
+        if not self.meta_inference_enabled:
+            meta_observation = self._build_meta_observation()
+            self._last_meta_observation = meta_observation
+            if self.observation_sink is not None:
+                self.observation_sink(
+                    self._time_step,
+                    self.active_resolution,
+                    meta_observation,
+                )
+        elif self._time_step % self.config.meta_interval == 0:
+            meta_observation = self._build_meta_observation()
             self._last_meta_observation = meta_observation
             current_resolution = self.active_resolution
             decision = self.meta_controller.infer(current_resolution, meta_observation)
@@ -134,6 +144,9 @@ class AdaptiveNavigationPolicy:
 
         self._advance_task_time()
         return None if selected is None else np.asarray(selected, dtype=int)
+
+    def _build_meta_observation(self) -> MetaObservation:
+        return MetaObservationBuilder(self.compute_source).build(self._task_metrics())
 
     def _task_metrics(self) -> TaskInferenceMetrics:
         assert self._observation is not None

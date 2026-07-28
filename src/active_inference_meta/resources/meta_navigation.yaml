@@ -35,9 +35,14 @@ active_inference:
   policy_workers: 1
   normalized_signal_preference: true
 meta_inference:
+  enabled: true
   initial_resolution: 10
+  fixed_resolution:
   candidate_resolutions: [2, 5, 10, 20]
   meta_interval: 3
+profiling:
+  enabled: false
+  output: meta_profile.csv
 meta_agent:
   message_passing_iterations: 30
   policy_samples: 500

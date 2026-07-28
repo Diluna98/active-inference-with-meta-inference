@@ -47,6 +47,8 @@ class AdaptiveConfig:
     initial_resolution: int = 10
     candidate_resolutions: tuple[int, int, int, int] = (2, 5, 10, 20)
     meta_interval: int = 3
+    enabled: bool = True
+    fixed_resolution: int | None = None
 
     def __post_init__(self) -> None:
         if len(self.candidate_resolutions) != 4:
@@ -55,6 +57,35 @@ class AdaptiveConfig:
             raise ValueError("initial_resolution must be a candidate resolution.")
         if self.meta_interval < 1:
             raise ValueError("meta_interval must be positive.")
+        if not self.enabled:
+            if self.fixed_resolution is None:
+                raise ValueError(
+                    "fixed_resolution is required when meta-inference is disabled."
+                )
+            if self.fixed_resolution not in self.candidate_resolutions:
+                raise ValueError("fixed_resolution must be a candidate resolution.")
+
+    @property
+    def task_resolution(self) -> int:
+        """Return the initial or explicitly fixed task-model resolution."""
+
+        return (
+            self.initial_resolution
+            if self.enabled
+            else int(self.fixed_resolution)
+        )
+
+
+@dataclass(frozen=True)
+class ProfilingConfig:
+    """Incremental meta-observation logging settings."""
+
+    enabled: bool = False
+    output: Path = Path("meta_profile.csv")
+
+    def __post_init__(self) -> None:
+        if self.enabled and not str(self.output):
+            raise ValueError("A profiling output path is required.")
 
 
 @dataclass(frozen=True)
@@ -68,6 +99,14 @@ class MetaRuntimeConfig:
     meta_likelihood: MetaLikelihoodParameters = field(
         default_factory=MetaLikelihoodParameters.from_json
     )
+    profiling: ProfilingConfig = field(default_factory=ProfilingConfig)
+
+    def __post_init__(self) -> None:
+        if self.profiling.enabled and self.adaptive.enabled:
+            raise ValueError(
+                "Profiling requires meta_inference.enabled: false "
+                "to keep the task resolution fixed."
+            )
 
 
 def _section(data: dict[str, Any], key: str) -> dict[str, Any]:
@@ -97,6 +136,9 @@ def _parse(data: Any) -> MetaRuntimeConfig:
         adaptive_data["candidate_resolutions"] = tuple(
             adaptive_data["candidate_resolutions"]
         )
+    profiling_data = _section(data, "profiling")
+    if "output" in profiling_data:
+        profiling_data["output"] = Path(profiling_data["output"])
     return MetaRuntimeConfig(
         navigation=navigation,
         adaptive=AdaptiveConfig(**adaptive_data),
@@ -107,6 +149,7 @@ def _parse(data: Any) -> MetaRuntimeConfig:
             if "meta_likelihood" in data
             else MetaLikelihoodParameters.from_json()
         ),
+        profiling=ProfilingConfig(**profiling_data),
     )
 
 
