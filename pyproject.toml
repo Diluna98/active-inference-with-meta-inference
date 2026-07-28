@@ -30,6 +30,7 @@ dependencies = [
   "matplotlib>=3.7",
   "numpy>=1.24",
   "pillow>=10.0",
+  "psutil>=5.9",
   "scipy>=1.10",
   "pyaif-toolkit>=0.2,<0.3",
 ]

@@ -16,7 +16,9 @@ from active_inference_navigation import (
 )
 
 from .controller import MetaInferenceController
-from .observations import MetaDecision, MetaObservation
+from .interfaces import ComputeResourceSource
+from .models import TaskInferenceMetrics
+from .observations import MetaDecision, MetaObservation, MetaObservationBuilder
 
 
 @dataclass(frozen=True)
@@ -325,11 +327,14 @@ def run_adaptive_navigation_episode(
     config: AdaptiveNavigationConfig | None = None,
     environment: GridNavigationEnvironment | None = None,
     meta_controller: MetaInferenceController | None = None,
+    compute_source: ComputeResourceSource | None = None,
     cpu_availability: Callable[[int, float], float] | None = None,
 ) -> AdaptiveNavigationResult:
     """Run navigation while meta-inference changes the source-state resolution."""
 
     config = config or AdaptiveNavigationConfig()
+    if compute_source is not None and cpu_availability is not None:
+        raise ValueError("Provide either compute_source or cpu_availability, not both.")
     navigation_config = replace(
         config.navigation,
         goal_resolution=config.initial_resolution,
@@ -364,14 +369,29 @@ def run_adaptive_navigation_episode(
         source_posterior = _source_belief(agent, step_index)
         information_gain = agent.likelihood.model.compute_sensitivity(observation)
         prediction_error = policy_averaged_rssi_surprise(agent, observation)
-        available_cpu = float(
-            cpu_availability(inference_resolution, measured_latency_ms)
-            if cpu_availability is not None
-            else baseline_compute_availability(
-                inference_resolution,
-                measured_latency_ms,
-            )
+        task_metrics = TaskInferenceMetrics(
+            information_gain_proxy=min(information_gain, 2.0),
+            prediction_error=prediction_error,
+            inference_latency_ms=measured_latency_ms,
         )
+        if compute_source is not None:
+            meta_observation = MetaObservationBuilder(compute_source).build(task_metrics)
+            available_cpu = meta_observation.cpu_availability
+        else:
+            available_cpu = float(
+                cpu_availability(inference_resolution, measured_latency_ms)
+                if cpu_availability is not None
+                else baseline_compute_availability(
+                    inference_resolution,
+                    measured_latency_ms,
+                )
+            )
+            meta_observation = MetaObservation(
+                information_gain_proxy=task_metrics.information_gain_proxy,
+                prediction_error=task_metrics.prediction_error,
+                inference_latency_ms=task_metrics.inference_latency_ms,
+                cpu_availability=available_cpu,
+            )
         if not 0.0 <= available_cpu <= 100.0:
             raise ValueError("CPU availability observations must lie between 0 and 100.")
         decision = None
@@ -381,12 +401,7 @@ def run_adaptive_navigation_episode(
         if step_index % config.meta_interval == 0:
             decision = controller.infer(
                 inference_resolution,
-                MetaObservation(
-                    information_gain_proxy=min(information_gain, 2.0),
-                    prediction_error=prediction_error,
-                    inference_latency_ms=measured_latency_ms,
-                    cpu_availability=available_cpu,
-                ),
+                meta_observation,
             )
             active_resolution = decision.selected_resolution
             if decision.switched:

@@ -6,29 +6,28 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .interfaces import ComputeResourceSource
+from .models import MetaObservation, TaskInferenceMetrics
+
+__all__ = ["MetaDecision", "MetaObservation", "MetaObservationBuilder"]
+
 
 @dataclass(frozen=True)
-class MetaObservation:
-    """Task-level signals observed by the representation-selection agent."""
+class MetaObservationBuilder:
+    """Combine task diagnostics with an independent processor observation."""
 
-    information_gain_proxy: float
-    prediction_error: float
-    inference_latency_ms: float
-    cpu_availability: float
+    compute_source: ComputeResourceSource
 
-    def as_array(self) -> np.ndarray:
-        values = np.array(
-            [
-                self.information_gain_proxy,
-                self.prediction_error,
-                self.inference_latency_ms,
-                self.cpu_availability,
-            ],
-            dtype=float,
+    def build(self, metrics: TaskInferenceMetrics) -> MetaObservation:
+        """Return one complete observation for the meta-inference controller."""
+
+        compute = self.compute_source.read()
+        return MetaObservation(
+            information_gain_proxy=metrics.information_gain_proxy,
+            prediction_error=metrics.prediction_error,
+            inference_latency_ms=metrics.inference_latency_ms,
+            cpu_availability=compute.cpu_availability,
         )
-        if not np.all(np.isfinite(values)):
-            raise ValueError("Meta observations must be finite.")
-        return values
 
 
 @dataclass(frozen=True)
