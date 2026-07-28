@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "active-inference-with-meta-inference"
-version = "0.1.1"
+version = "0.1.2"
 description = "Hierarchical active inference for adaptive model representation."
 readme = "README.md"
 requires-python = ">=3.10"
