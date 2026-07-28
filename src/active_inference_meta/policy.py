@@ -166,8 +166,9 @@ class AdaptiveNavigationPolicy:
     def _advance_task_time(self) -> None:
         phase = self._time_step % self._agent.temporal_horizon
         if phase == self._agent.temporal_horizon - 1:
-            self._agent.initialize_variables()
-        self._agent.step_time(self._time_step)
+            self._agent.reset()
+        else:
+            self._agent.step_time(self._time_step)
         self._time_step += 1
 
     @property
