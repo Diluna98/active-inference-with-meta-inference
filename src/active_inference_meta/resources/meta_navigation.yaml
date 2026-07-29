@@ -45,8 +45,10 @@ profiling:
   output: meta_profile.csv
 visualization:
   enabled: false
+  mode: map
   refresh_steps: 1
   clear_terminal: true
+  output: goal_belief.png
 meta_agent:
   message_passing_iterations: 30
   policy_samples: 500

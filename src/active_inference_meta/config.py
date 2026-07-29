@@ -93,10 +93,14 @@ class VisualizationConfig:
     """Asynchronous runtime display settings."""
 
     enabled: bool = False
+    mode: str = "map"
     refresh_steps: int = 1
     clear_terminal: bool = True
+    output: Path = Path("goal_belief.png")
 
     def __post_init__(self) -> None:
+        if self.mode not in ("map", "terminal"):
+            raise ValueError("visualization.mode must be 'map' or 'terminal'.")
         if self.refresh_steps < 1:
             raise ValueError("visualization.refresh_steps must be positive.")
 
@@ -153,6 +157,9 @@ def _parse(data: Any) -> MetaRuntimeConfig:
     profiling_data = _section(data, "profiling")
     if "output" in profiling_data:
         profiling_data["output"] = Path(profiling_data["output"])
+    visualization_data = _section(data, "visualization")
+    if "output" in visualization_data:
+        visualization_data["output"] = Path(visualization_data["output"])
     return MetaRuntimeConfig(
         navigation=navigation,
         adaptive=AdaptiveConfig(**adaptive_data),
@@ -164,7 +171,7 @@ def _parse(data: Any) -> MetaRuntimeConfig:
             else MetaLikelihoodParameters.from_json()
         ),
         profiling=ProfilingConfig(**profiling_data),
-        visualization=VisualizationConfig(**_section(data, "visualization")),
+        visualization=VisualizationConfig(**visualization_data),
     )
 
 

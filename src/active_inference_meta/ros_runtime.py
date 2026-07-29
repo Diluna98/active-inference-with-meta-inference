@@ -33,7 +33,7 @@ from .config import (
 from .controller import MetaInferenceConfig, MetaInferenceController
 from .policy import AdaptiveNavigationPolicy
 from .profiling import CsvMetaObservationLogger
-from .visualization import AsyncTerminalBeliefVisualizer
+from .visualization import AsyncMapBeliefVisualizer, AsyncTerminalBeliefVisualizer
 
 
 def build_adaptive_policy(
@@ -153,14 +153,20 @@ def run_ros_meta_navigation(
         if config.profiling.enabled
         else None
     )
-    belief_visualizer = (
-        AsyncTerminalBeliefVisualizer(
-            refresh_steps=config.visualization.refresh_steps,
-            clear_terminal=config.visualization.clear_terminal,
-        )
-        if config.visualization.enabled
-        else None
-    )
+    belief_visualizer = None
+    if config.visualization.enabled:
+        if config.visualization.mode == "map":
+            belief_visualizer = AsyncMapBeliefVisualizer(
+                config.visualization.output,
+                arena_width=nav.grid.width,
+                arena_height=nav.grid.height,
+                refresh_steps=config.visualization.refresh_steps,
+            )
+        else:
+            belief_visualizer = AsyncTerminalBeliefVisualizer(
+                refresh_steps=config.visualization.refresh_steps,
+                clear_terminal=config.visualization.clear_terminal,
+            )
     runtime = NavigationRuntime(
         agent=build_adaptive_policy(
             config,

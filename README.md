@@ -316,29 +316,38 @@ Repeat with fixed resolutions `2`, `5`, `10`, and `20`, using a different
 output filename for each run. Existing non-empty output files are appended, so
 use a new filename when trials must remain separate.
 
-## View the goal belief over SSH
+## View the goal belief on the metric arena
 
-Enable the asynchronous terminal heatmap in the runtime YAML:
+Enable the asynchronous map renderer in the runtime YAML:
 
 ```yaml
 visualization:
   enabled: true
+  mode: map
   refresh_steps: 1
-  clear_terminal: true
+  output: goal_belief.png
 ```
 
-The running ROS command then displays the task agent's source/goal posterior:
-
-```text
-GOAL BELIEF | step=4 | resolution=10x10 | MAP cell=(3, 7) | p=0.1842
-   .:-.
-  .-+*:
-  :=%@-
-  .-++:
-```
+The PNG is replaced atomically after each accepted frame. It shows the arena
+dimensions from YAML (7 m by 7 m in the packaged configuration), with arena x
+horizontal, arena y vertical, and `(0, 0)` at the lower-left. The heatmap is
+the task-level source/goal posterior, the blue circle is the current robot
+position, and the green star is the maximum-posterior goal cell.
 
 The actual grid uses the active resolution, so it automatically changes when
 meta-inference switches between 2x2, 5x5, 10x10, and 20x20 models.
+
+Open `goal_belief.png` through an SSH-aware editor such as VS Code Remote SSH,
+or copy it to the local computer while the run is active. A compact SSH
+terminal view remains available with:
+
+```yaml
+visualization:
+  enabled: true
+  mode: terminal
+  refresh_steps: 1
+  clear_terminal: true
+```
 
 Belief snapshots are copied only after `infer_states()` has finished and are
 rendered by a background worker. Queue submission never waits; if rendering
