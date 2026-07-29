@@ -316,6 +316,38 @@ Repeat with fixed resolutions `2`, `5`, `10`, and `20`, using a different
 output filename for each run. Existing non-empty output files are appended, so
 use a new filename when trials must remain separate.
 
+## View the goal belief over SSH
+
+Enable the asynchronous terminal heatmap in the runtime YAML:
+
+```yaml
+visualization:
+  enabled: true
+  refresh_steps: 1
+  clear_terminal: true
+```
+
+The running ROS command then displays the task agent's source/goal posterior:
+
+```text
+GOAL BELIEF | step=4 | resolution=10x10 | MAP cell=(3, 7) | p=0.1842
+   .:-.
+  .-+*:
+  :=%@-
+  .-++:
+```
+
+The actual grid uses the active resolution, so it automatically changes when
+meta-inference switches between 2x2, 5x5, 10x10, and 20x20 models.
+
+Belief snapshots are copied only after `infer_states()` has finished and are
+rendered by a background worker. Queue submission never waits; if rendering
+falls behind, an old frame is discarded. Rendering time is therefore not
+included in `inference_latency_ms`. Rendering still consumes a small amount of
+processor time and can consequently influence the separately measured CPU
+availability. For calibration-quality CPU experiments, either disable the
+visualization or use a larger `refresh_steps`, such as `5`.
+
 ## Learned meta-likelihood
 
 The packaged parameters define:

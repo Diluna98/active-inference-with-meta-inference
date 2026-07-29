@@ -43,6 +43,10 @@ meta_inference:
 profiling:
   enabled: false
   output: meta_profile.csv
+visualization:
+  enabled: false
+  refresh_steps: 1
+  clear_terminal: true
 meta_agent:
   message_passing_iterations: 30
   policy_samples: 500

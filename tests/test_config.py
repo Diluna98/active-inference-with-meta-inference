@@ -26,6 +26,7 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.meta_likelihood.mu_cpu.tolist() == [20.0, 57.5, 87.5]
     assert config.adaptive.enabled is True
     assert config.profiling.enabled is False
+    assert config.visualization.enabled is False
 
 
 def test_policy_building_does_not_require_ros_imports():

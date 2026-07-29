@@ -33,12 +33,14 @@ from .config import (
 from .controller import MetaInferenceConfig, MetaInferenceController
 from .policy import AdaptiveNavigationPolicy
 from .profiling import CsvMetaObservationLogger
+from .visualization import AsyncTerminalBeliefVisualizer
 
 
 def build_adaptive_policy(
     config: MetaRuntimeConfig,
     *,
     observation_sink=None,
+    belief_sink=None,
 ) -> AdaptiveNavigationPolicy:
     """Build the technology-neutral policy from typed configuration."""
 
@@ -92,6 +94,7 @@ def build_adaptive_policy(
         ),
         meta_inference_enabled=adaptive.enabled,
         observation_sink=observation_sink,
+        belief_sink=belief_sink,
     )
 
 
@@ -150,11 +153,24 @@ def run_ros_meta_navigation(
         if config.profiling.enabled
         else None
     )
+    belief_visualizer = (
+        AsyncTerminalBeliefVisualizer(
+            refresh_steps=config.visualization.refresh_steps,
+            clear_terminal=config.visualization.clear_terminal,
+        )
+        if config.visualization.enabled
+        else None
+    )
     runtime = NavigationRuntime(
         agent=build_adaptive_policy(
             config,
             observation_sink=(
                 profile_logger.record if profile_logger is not None else None
+            ),
+            belief_sink=(
+                belief_visualizer.submit
+                if belief_visualizer is not None
+                else None
             ),
         ),
         observation_source=source,
@@ -178,6 +194,8 @@ def run_ros_meta_navigation(
         actuator.stop()
         if profile_logger is not None:
             profile_logger.close()
+        if belief_visualizer is not None:
+            belief_visualizer.close()
         _ = subscriptions
 
 

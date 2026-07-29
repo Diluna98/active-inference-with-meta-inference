@@ -38,6 +38,7 @@ class AdaptiveNavigationPolicy:
     meta_controller: MetaInferenceController = field(default_factory=MetaInferenceController)
     meta_inference_enabled: bool = True
     observation_sink: Callable[[int, int, MetaObservation], None] | None = None
+    belief_sink: Callable[[int, int, np.ndarray], None] | None = None
     clock: Any = perf_counter
     _agent: Any = field(init=False, repr=False)
     _navigation_config: Any = field(init=False, repr=False)
@@ -139,14 +140,24 @@ class AdaptiveNavigationPolicy:
                     self._navigation_config,
                     goal_resolution=decision.selected_resolution,
                 )
+                self._emit_belief()
                 self._time_step += 1
                 return None
 
+        self._emit_belief()
         self._advance_task_time()
         return None if selected is None else np.asarray(selected, dtype=int)
 
     def _build_meta_observation(self) -> MetaObservation:
         return MetaObservationBuilder(self.compute_source).build(self._task_metrics())
+
+    def _emit_belief(self) -> None:
+        if self.belief_sink is not None:
+            self.belief_sink(
+                self._time_step,
+                self.active_resolution,
+                self.source_belief.copy(),
+            )
 
     def _task_metrics(self) -> TaskInferenceMetrics:
         assert self._observation is not None

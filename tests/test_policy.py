@@ -63,6 +63,7 @@ def test_adaptive_policy_exposes_navigation_runtime_agent_protocol():
     assert policy.active_resolution == 2
     assert policy.last_meta_observation is not None
     assert policy.last_meta_observation.cpu_availability == 75.0
+    assert np.isclose(policy.last_meta_observation.inference_latency_ms, 10.0)
 
 
 def test_fixed_resolution_policy_records_without_running_meta_inference():

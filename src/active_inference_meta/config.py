@@ -89,6 +89,19 @@ class ProfilingConfig:
 
 
 @dataclass(frozen=True)
+class VisualizationConfig:
+    """Asynchronous runtime display settings."""
+
+    enabled: bool = False
+    refresh_steps: int = 1
+    clear_terminal: bool = True
+
+    def __post_init__(self) -> None:
+        if self.refresh_steps < 1:
+            raise ValueError("visualization.refresh_steps must be positive.")
+
+
+@dataclass(frozen=True)
 class MetaRuntimeConfig:
     """Complete configuration for adaptive real-world navigation."""
 
@@ -100,6 +113,7 @@ class MetaRuntimeConfig:
         default_factory=MetaLikelihoodParameters.from_json
     )
     profiling: ProfilingConfig = field(default_factory=ProfilingConfig)
+    visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
 
     def __post_init__(self) -> None:
         if self.profiling.enabled and self.adaptive.enabled:
@@ -150,6 +164,7 @@ def _parse(data: Any) -> MetaRuntimeConfig:
             else MetaLikelihoodParameters.from_json()
         ),
         profiling=ProfilingConfig(**profiling_data),
+        visualization=VisualizationConfig(**_section(data, "visualization")),
     )
 
 
