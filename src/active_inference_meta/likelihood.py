@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import yaml
 from scipy.special import digamma, gammaln
 from scipy.stats import t as student_t
 
@@ -70,6 +72,56 @@ class MetaLikelihoodParameters:
         data.setdefault("mu_cpu", [20.0, 57.5, 87.5])
         data.setdefault("sigma_cpu", [8.0, 10.0, 8.0])
         return cls.from_mapping(data)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> MetaLikelihoodParameters:
+        """Load learned parameters from a YAML checkpoint."""
+
+        checkpoint = Path(path)
+        try:
+            data = yaml.safe_load(checkpoint.read_text(encoding="utf-8")) or {}
+        except OSError as error:
+            raise OSError(
+                f"Could not read meta-likelihood checkpoint: {checkpoint}"
+            ) from error
+        if not isinstance(data, dict):
+            raise TypeError("The meta-likelihood checkpoint must be a YAML mapping.")
+        parameters = data.get("meta_likelihood", data)
+        if not isinstance(parameters, dict):
+            raise TypeError(
+                "The checkpoint 'meta_likelihood' section must be a mapping."
+            )
+        try:
+            return cls.from_mapping(parameters)
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(
+                f"Invalid meta-likelihood checkpoint: {checkpoint}"
+            ) from error
+
+    def to_mapping(self) -> dict[str, list]:
+        """Return plain YAML-serializable likelihood parameters."""
+
+        return {
+            name: np.asarray(getattr(self, name), dtype=float).tolist()
+            for name in self.__annotations__
+        }
+
+    def save_yaml(self, path: str | Path) -> None:
+        """Atomically save the current learned parameters as YAML."""
+
+        checkpoint = Path(path)
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        temporary = checkpoint.with_name(f".{checkpoint.name}.tmp")
+        payload = yaml.safe_dump(
+            {"meta_likelihood": self.to_mapping()},
+            sort_keys=False,
+        )
+        try:
+            temporary.write_text(payload, encoding="utf-8")
+            os.replace(temporary, checkpoint)
+        except OSError:
+            temporary.unlink(missing_ok=True)
+            raise
 
     def validate(self) -> None:
         expected_context_shape = (4, 4)

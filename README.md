@@ -246,7 +246,7 @@ active-inference-meta-ros --planning-windows 20
 The packaged configuration uses:
 
 - a 7 m by 7 m arena and 20 by 20 movement grid;
-- a 10 by 10 initial source representation;
+- a 2 by 2 initial source representation;
 - candidate representations 2 by 2, 5 by 5, 10 by 10, and 20 by 20;
 - arena positive x from odometry negative y and arena positive y from
   odometry positive x;
@@ -254,7 +254,7 @@ The packaged configuration uses:
 - a five-sample RSSI median and five-sample CPU-availability median;
 - a three-step temporal horizon for task-level Active Inference;
 - meta-likelihood learning enabled with `learning_A: true`;
-- the calibrated dBm likelihood and persistent `-62 dBm` termination rule.
+- the calibrated dBm likelihood and persistent `-54 dBm` termination rule.
 
 External CPU availability is sampled continuously on the processor running the
 command. The sampler subtracts CPU time used by this program and its live child
@@ -269,8 +269,8 @@ The support of each continuous meta-observation modality is configured once:
 
 ```yaml
 meta_observation_bounds:
-  information_gain_proxy: [0.0, 2.0]
-  prediction_error: [2.0, 10.0]
+  information_gain_proxy: [0.0, 0.2]
+  prediction_error: [20.0, 35.0]
   inference_latency_ms: [50.0, 9000.0]
   cpu_availability: [0.0, 100.0]
 ```
@@ -279,6 +279,31 @@ These bounds define the likelihood observation grids. Every real
 meta-observation is clipped to them immediately before state inference and
 online likelihood learning, so an outlier cannot update the model outside its
 configured support. Profiling still records the raw task and CPU measurements.
+
+Learned prediction-error and latency likelihood parameters can persist across
+robot trials:
+
+```yaml
+meta_learning:
+  checkpoint: learned_meta_likelihood.yaml
+  load_if_available: true
+  save_on_exit: true
+```
+
+For an explicit main configuration file, a relative checkpoint path is
+resolved relative to that configuration file. At startup, an existing
+checkpoint replaces the `meta_likelihood` priors from the main YAML. If the
+checkpoint does not exist, the main-YAML priors are used. Updated parameters
+are atomically saved on runtime exit when meta-inference and likelihood
+learning are enabled. Delete or rename the checkpoint to deliberately restart
+from the priors.
+
+During a ROS run, every scheduled meta-level action prints the current and
+selected representation, including actions that keep the existing model:
+
+```text
+META model: step=3, current=2x2, selected=5x5, switched=True
+```
 
 Before each physical trial:
 

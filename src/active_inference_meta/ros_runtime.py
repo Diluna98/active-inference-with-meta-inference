@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 from pathlib import Path
 from threading import Thread
 from time import monotonic, sleep
@@ -31,9 +32,57 @@ from .config import (
     load_meta_runtime_config,
 )
 from .controller import MetaInferenceConfig, MetaInferenceController
+from .likelihood import MetaLikelihoodParameters
+from .observations import MetaDecision
 from .policy import AdaptiveNavigationPolicy
 from .profiling import CsvMetaObservationLogger
 from .visualization import AsyncMapBeliefVisualizer, AsyncTerminalBeliefVisualizer
+
+
+def print_meta_decision(
+    step: int,
+    current_resolution: int,
+    decision: MetaDecision,
+) -> None:
+    """Print every model action selected by the meta-inference agent."""
+
+    print(
+        "META model: "
+        f"step={step}, "
+        f"current={current_resolution}x{current_resolution}, "
+        f"selected={decision.selected_resolution}x{decision.selected_resolution}, "
+        f"switched={decision.switched}",
+        flush=True,
+    )
+
+
+def load_configured_meta_likelihood(
+    config: MetaRuntimeConfig,
+) -> MetaLikelihoodParameters:
+    """Load a learned checkpoint when present, otherwise copy configured priors."""
+
+    checkpoint = config.meta_learning.checkpoint
+    if config.meta_learning.load_if_available and checkpoint.is_file():
+        return MetaLikelihoodParameters.from_yaml(checkpoint)
+    return copy.deepcopy(config.meta_likelihood)
+
+
+def save_learned_meta_likelihood(
+    policy: AdaptiveNavigationPolicy,
+    config: MetaRuntimeConfig,
+) -> bool:
+    """Persist learned parameters when adaptive likelihood learning is active."""
+
+    if not (
+        config.meta_learning.save_on_exit
+        and config.adaptive.enabled
+        and config.meta_agent.learning_A
+    ):
+        return False
+    policy.meta_controller.likelihood_model.parameters.save_yaml(
+        config.meta_learning.checkpoint
+    )
+    return True
 
 
 def build_adaptive_policy(
@@ -41,6 +90,7 @@ def build_adaptive_policy(
     *,
     observation_sink=None,
     belief_sink=None,
+    decision_sink=None,
 ) -> AdaptiveNavigationPolicy:
     """Build the technology-neutral policy from typed configuration."""
 
@@ -91,12 +141,13 @@ def build_adaptive_policy(
                 learning_rate=config.meta_agent.learning_rate,
                 forgetting_rate=config.meta_agent.forgetting_rate,
             ),
-            parameters=config.meta_likelihood,
+            parameters=load_configured_meta_likelihood(config),
             observation_bounds=config.meta_observation_bounds,
         ),
         meta_inference_enabled=adaptive.enabled,
         observation_sink=observation_sink,
         belief_sink=belief_sink,
+        decision_sink=decision_sink,
     )
 
 
@@ -179,6 +230,7 @@ def run_ros_meta_navigation(
             if belief_visualizer is not None
             else None
         ),
+        decision_sink=print_meta_decision,
     )
     runtime = NavigationRuntime(
         agent=policy,
@@ -209,14 +261,17 @@ def run_ros_meta_navigation(
         return runtime.run(planning_windows=planning_windows)
     finally:
         actuator.stop()
-        close_compute_source = getattr(policy.compute_source, "close", None)
-        if close_compute_source is not None:
-            close_compute_source()
-        if profile_logger is not None:
-            profile_logger.close()
-        if belief_visualizer is not None:
-            belief_visualizer.close()
-        _ = subscriptions
+        try:
+            save_learned_meta_likelihood(policy, config)
+        finally:
+            close_compute_source = getattr(policy.compute_source, "close", None)
+            if close_compute_source is not None:
+                close_compute_source()
+            if profile_logger is not None:
+                profile_logger.close()
+            if belief_visualizer is not None:
+                belief_visualizer.close()
+            _ = subscriptions
 
 
 def build_parser() -> argparse.ArgumentParser:

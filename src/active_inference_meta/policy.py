@@ -39,6 +39,7 @@ class AdaptiveNavigationPolicy:
     meta_inference_enabled: bool = True
     observation_sink: Callable[[int, int, MetaObservation], None] | None = None
     belief_sink: Callable[[int, int, np.ndarray, float, float], None] | None = None
+    decision_sink: Callable[[int, int, MetaDecision], None] | None = None
     clock: Any = perf_counter
     _agent: Any = field(init=False, repr=False)
     _navigation_config: Any = field(init=False, repr=False)
@@ -130,6 +131,8 @@ class AdaptiveNavigationPolicy:
             current_resolution = self.active_resolution
             decision = self.meta_controller.infer(current_resolution, meta_observation)
             self._last_decision = decision
+            if self.decision_sink is not None:
+                self.decision_sink(self._time_step, current_resolution, decision)
             if decision.switched:
                 self._agent = rebuild_navigation_agent(
                     self._agent,

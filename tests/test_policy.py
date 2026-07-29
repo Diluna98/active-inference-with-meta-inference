@@ -47,12 +47,16 @@ class DeepTaskAgentSpy:
 
 
 def test_adaptive_policy_exposes_navigation_runtime_agent_protocol():
+    decisions = []
     policy = AdaptiveNavigationPolicy(
         compute_source=FixedComputeResourceSource(
             ComputeResourceObservation(75.0, measured_at=1.0)
         ),
         config=AdaptiveNavigationConfig(maximum_steps=3),
         meta_controller=KeepResolutionController(),
+        decision_sink=lambda step, resolution, decision: decisions.append(
+            (step, resolution, decision.selected_resolution)
+        ),
         clock=iter((1.0, 1.01)).__next__,
     )
     policy.reset()
@@ -67,6 +71,7 @@ def test_adaptive_policy_exposes_navigation_runtime_agent_protocol():
     assert policy.last_meta_observation is not None
     assert policy.last_meta_observation.cpu_availability == 75.0
     assert np.isclose(policy.last_meta_observation.inference_latency_ms, 10.0)
+    assert decisions == [(0, 2, 2)]
 
 
 def test_fixed_resolution_policy_records_without_running_meta_inference():
