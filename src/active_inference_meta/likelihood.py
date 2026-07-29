@@ -12,6 +12,8 @@ import numpy as np
 from scipy.special import digamma, gammaln
 from scipy.stats import t as student_t
 
+from .models import MetaObservationBounds
+
 
 def _softmax(values: np.ndarray, axis: int = 0, gamma: float = 1.0) -> np.ndarray:
     scaled = gamma * np.asarray(values, dtype=float)
@@ -119,9 +121,11 @@ class MetaLikelihood:
         parameters: MetaLikelihoodParameters | None = None,
         *,
         grid_size: int = 100,
+        observation_bounds: MetaObservationBounds | None = None,
     ) -> None:
         self.parameters = parameters or MetaLikelihoodParameters.from_json()
         self.grid_size = int(grid_size)
+        self.observation_bounds = observation_bounds or MetaObservationBounds()
         if self.grid_size < 2:
             raise ValueError("grid_size must be at least two.")
 
@@ -129,15 +133,7 @@ class MetaLikelihood:
 
     def get_o_grid(self, modality: int, N_grid: int | None = None) -> np.ndarray:
         size = self.grid_size if N_grid is None else int(N_grid)
-        limits = {
-            0: (0.0, 2.0),
-            1: (2.0, 10.0),
-            2: (50.0, 9000.0),
-            3: (0.0, 100.0),
-        }
-        if modality not in limits:
-            raise ValueError(f"Unknown meta-observation modality: {modality}")
-        lower, upper = limits[modality]
+        lower, upper = self.observation_bounds.limits(modality)
         return np.linspace(lower, upper, size)
 
     def _build_preferences(self) -> dict:
@@ -259,8 +255,7 @@ class MetaLikelihood:
         parameters.mu_lat[...] = np.clip(
             parameters.mu_lat
             + learning_rate * latency_responsibility * latency_error,
-            50.0,
-            9000.0,
+            *self.observation_bounds.inference_latency_ms,
         )
         variance = parameters.sigma_lat**2
         variance += (

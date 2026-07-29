@@ -7,6 +7,7 @@ from active_inference_meta import (
     MetaLikelihood,
     MetaLikelihoodParameters,
     MetaObservation,
+    MetaObservationBounds,
     load_trace,
     run_meta_trace,
 )
@@ -35,6 +36,55 @@ def test_meta_likelihood_modalities_are_finite_and_nonnegative():
         assert values.shape == shape
         assert np.all(np.isfinite(values))
         assert np.all(values >= 0.0)
+
+
+def test_meta_observation_bounds_define_grids_and_clamp_real_observations():
+    bounds = MetaObservationBounds(
+        information_gain_proxy=(0.0, 1.0),
+        prediction_error=(1.0, 8.0),
+        inference_latency_ms=(20.0, 1000.0),
+        cpu_availability=(10.0, 90.0),
+    )
+    likelihood = MetaLikelihood(observation_bounds=bounds)
+    controller = MetaInferenceController(observation_bounds=bounds)
+
+    assert likelihood.get_o_grid(0)[[0, -1]].tolist() == [0.0, 1.0]
+    assert likelihood.get_o_grid(3)[[0, -1]].tolist() == [10.0, 90.0]
+    assert controller.clamp_observation(
+        MetaObservation(2.0, -5.0, 5000.0, 100.0)
+    ).as_array().tolist() == [1.0, 1.0, 1000.0, 90.0]
+
+
+def test_invalid_meta_observation_bounds_are_rejected():
+    with pytest.raises(ValueError, match="minimum must be below maximum"):
+        MetaObservationBounds(prediction_error=(2.0, 2.0))
+    with pytest.raises(ValueError, match=r"within \[0, 100\]"):
+        MetaObservationBounds(cpu_availability=(-1.0, 100.0))
+
+
+def test_meta_controller_clamps_before_inference_and_learning(monkeypatch):
+    bounds = MetaObservationBounds(
+        information_gain_proxy=(0.0, 2.0),
+        prediction_error=(2.0, 10.0),
+        inference_latency_ms=(50.0, 9000.0),
+        cpu_availability=(10.0, 90.0),
+    )
+    controller = MetaInferenceController(observation_bounds=bounds)
+    observed_by_learning = {}
+    original_update = controller.likelihood_model.update_from_observation
+
+    def capture_update(observation, state_beliefs, learning_rate=0.1):
+        observed_by_learning["values"] = np.asarray(observation).copy()
+        return original_update(observation, state_beliefs, learning_rate)
+
+    monkeypatch.setattr(
+        controller.likelihood_model,
+        "update_from_observation",
+        capture_update,
+    )
+    controller.infer(2, MetaObservation(5.0, -2.0, 10000.0, 100.0))
+
+    assert observed_by_learning["values"].tolist() == [2.0, 2.0, 9000.0, 90.0]
 
 
 def test_meta_preferences_match_configured_utility_equations():

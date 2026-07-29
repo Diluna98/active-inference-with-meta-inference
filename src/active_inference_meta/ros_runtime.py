@@ -24,7 +24,7 @@ from active_inference_navigation.ros_runtime import build_termination_condition
 from active_inference_navigation.runtime import NavigationRuntime, NavigationRuntimeResult
 
 from .adaptive_navigation import AdaptiveNavigationConfig
-from .compute import PsutilComputeResourceSource
+from .compute import ExternalCpuAvailabilitySource
 from .config import (
     MetaRuntimeConfig,
     load_default_meta_runtime_config,
@@ -69,9 +69,10 @@ def build_adaptive_policy(
         maximum_rssi=nav.rssi_likelihood.maximum_rssi,
     )
     return AdaptiveNavigationPolicy(
-        compute_source=PsutilComputeResourceSource(
+        compute_source=ExternalCpuAvailabilitySource(
             median_window=config.compute.median_window,
             timeout_seconds=config.compute.timeout_seconds,
+            sample_interval_seconds=config.compute.sample_interval_seconds,
         ),
         config=AdaptiveNavigationConfig(
             navigation=navigation_config,
@@ -91,6 +92,7 @@ def build_adaptive_policy(
                 forgetting_rate=config.meta_agent.forgetting_rate,
             ),
             parameters=config.meta_likelihood,
+            observation_bounds=config.meta_observation_bounds,
         ),
         meta_inference_enabled=adaptive.enabled,
         observation_sink=observation_sink,
@@ -167,18 +169,19 @@ def run_ros_meta_navigation(
                 refresh_steps=config.visualization.refresh_steps,
                 clear_terminal=config.visualization.clear_terminal,
             )
-    runtime = NavigationRuntime(
-        agent=build_adaptive_policy(
-            config,
-            observation_sink=(
-                profile_logger.record if profile_logger is not None else None
-            ),
-            belief_sink=(
-                belief_visualizer.submit
-                if belief_visualizer is not None
-                else None
-            ),
+    policy = build_adaptive_policy(
+        config,
+        observation_sink=(
+            profile_logger.record if profile_logger is not None else None
         ),
+        belief_sink=(
+            belief_visualizer.submit
+            if belief_visualizer is not None
+            else None
+        ),
+    )
+    runtime = NavigationRuntime(
+        agent=policy,
         observation_source=source,
         action_executor=actuator,
         termination_condition=build_termination_condition(nav),
@@ -195,9 +198,20 @@ def run_ros_meta_navigation(
                 if monotonic() >= deadline:
                     raise
                 sleep(0.05)
+        compute_source = policy.compute_source
+        if (
+            isinstance(compute_source, ExternalCpuAvailabilitySource)
+            and not compute_source.wait_until_ready(config.compute.timeout_seconds)
+        ):
+            raise TimeoutError(
+                "The external CPU sampler did not produce a measurement in time."
+            )
         return runtime.run(planning_windows=planning_windows)
     finally:
         actuator.stop()
+        close_compute_source = getattr(policy.compute_source, "close", None)
+        if close_compute_source is not None:
+            close_compute_source()
         if profile_logger is not None:
             profile_logger.close()
         if belief_visualizer is not None:

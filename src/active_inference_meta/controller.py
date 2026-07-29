@@ -16,6 +16,7 @@ from PyAIF import (
 )
 
 from .likelihood import MetaLikelihood, MetaLikelihoodParameters
+from .models import MetaObservationBounds
 from .observations import MetaDecision, MetaObservation
 
 
@@ -75,9 +76,14 @@ class MetaInferenceController:
         config: MetaInferenceConfig | None = None,
         *,
         parameters: MetaLikelihoodParameters | None = None,
+        observation_bounds: MetaObservationBounds | None = None,
     ) -> None:
         self.config = config or MetaInferenceConfig()
-        self.likelihood_model = MetaLikelihood(parameters)
+        self.observation_bounds = observation_bounds or MetaObservationBounds()
+        self.likelihood_model = MetaLikelihood(
+            parameters,
+            observation_bounds=self.observation_bounds,
+        )
         controls_dim = (5, 1, 1)
         states_dim = self.likelihood_model.states_dim
         policies = utils.construct_policies(
@@ -144,7 +150,9 @@ class MetaInferenceController:
         self.agent.pD[1] = np.full(4, 0.25, dtype=float)
         self.agent.pD[2] = np.full(3, 1.0 / 3.0, dtype=float)
         self.agent.reset()
-        self.agent.observe(observation.as_array())
+        clamped_observation = self.observation_bounds.clamp(observation)
+        observation_vector = clamped_observation.as_array()
+        self.agent.observe(observation_vector)
         self.agent.infer_states()
         expected_free_energy, _ = self.agent.infer_policies()
         action = self.agent.select_action()
@@ -172,11 +180,16 @@ class MetaInferenceController:
         )
         if self.config.learning_A:
             self.likelihood_model.update_from_observation(
-                observation.as_array(),
+                observation_vector,
                 self.agent.posteriors,
                 learning_rate=self.config.learning_rate,
             )
         return decision
+
+    def clamp_observation(self, observation: MetaObservation) -> MetaObservation:
+        """Return the exact bounded observation supplied to meta-inference."""
+
+        return self.observation_bounds.clamp(observation)
 
     def infer_sequence(
         self,
@@ -199,4 +212,5 @@ class MetaInferenceController:
         return MetaInferenceController(
             config=self.config,
             parameters=copy.deepcopy(self.likelihood_model.parameters),
+            observation_bounds=self.observation_bounds,
         )

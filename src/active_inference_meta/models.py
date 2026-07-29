@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -72,6 +73,57 @@ class MetaObservation:
         if not 0.0 <= self.cpu_availability <= 100.0:
             raise ValueError("CPU availability must lie between 0 and 100 percent.")
         return values
+
+
+@dataclass(frozen=True)
+class MetaObservationBounds:
+    """Configured lower and upper limits for all meta-observation modalities."""
+
+    information_gain_proxy: tuple[float, float] = (0.0, 2.0)
+    prediction_error: tuple[float, float] = (2.0, 10.0)
+    inference_latency_ms: tuple[float, float] = (50.0, 9000.0)
+    cpu_availability: tuple[float, float] = (0.0, 100.0)
+
+    def __post_init__(self) -> None:
+        for name in self.__annotations__:
+            raw_bounds = getattr(self, name)
+            if len(raw_bounds) != 2:
+                raise ValueError(f"{name} bounds must contain [minimum, maximum].")
+            bounds = tuple(float(value) for value in raw_bounds)
+            if not np.all(np.isfinite(bounds)) or bounds[0] >= bounds[1]:
+                raise ValueError(
+                    f"{name} bounds must be finite and minimum must be below maximum."
+                )
+            object.__setattr__(self, name, bounds)
+        if self.cpu_availability[0] < 0.0 or self.cpu_availability[1] > 100.0:
+            raise ValueError("CPU availability bounds must remain within [0, 100].")
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> MetaObservationBounds:
+        """Build bounds from the ``meta_observation_bounds`` YAML section."""
+
+        return cls(**data)
+
+    def limits(self, modality: int) -> tuple[float, float]:
+        """Return the limits for a modality in meta-agent observation order."""
+
+        ordered = (
+            self.information_gain_proxy,
+            self.prediction_error,
+            self.inference_latency_ms,
+            self.cpu_availability,
+        )
+        if modality < 0 or modality >= len(ordered):
+            raise ValueError(f"Unknown meta-observation modality: {modality}")
+        return ordered[modality]
+
+    def clamp(self, observation: MetaObservation) -> MetaObservation:
+        """Clip a finite observation to the configured likelihood support."""
+
+        values = observation.as_array()
+        limits = np.asarray([self.limits(index) for index in range(4)], dtype=float)
+        clipped = np.clip(values, limits[:, 0], limits[:, 1])
+        return MetaObservation(*clipped.tolist())
 
 
 @dataclass(frozen=True)

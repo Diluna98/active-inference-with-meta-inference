@@ -256,11 +256,29 @@ The packaged configuration uses:
 - meta-likelihood learning enabled with `learning_A: true`;
 - the calibrated dBm likelihood and persistent `-62 dBm` termination rule.
 
-CPU availability is measured on the processor running the command. It is
-reported as a percentage (`100 - CPU utilization`) and remains separate from
-the task observation `[x, y, RSSI]`. Replace `ComputeResourceSource` if
-inference later runs on a different computer or availability arrives over a
-ROS topic.
+External CPU availability is sampled continuously on the processor running the
+command. The sampler subtracts CPU time used by this program and its live child
+processes from system-wide busy time, so task inference, meta-inference, ROS
+callbacks, and visualization are not treated as environmental CPU load. The
+remaining external load is reported as availability (`100 - external CPU
+utilization`) and remains separate from the task observation `[x, y, RSSI]`.
+Replace `ComputeResourceSource` if availability later arrives from a different
+computer or over a ROS topic.
+
+The support of each continuous meta-observation modality is configured once:
+
+```yaml
+meta_observation_bounds:
+  information_gain_proxy: [0.0, 2.0]
+  prediction_error: [2.0, 10.0]
+  inference_latency_ms: [50.0, 9000.0]
+  cpu_availability: [0.0, 100.0]
+```
+
+These bounds define the likelihood observation grids. Every real
+meta-observation is clipped to them immediately before state inference and
+online likelihood learning, so an outlier cannot update the model outside its
+configured support. Profiling still records the raw task and CPU measurements.
 
 Before each physical trial:
 

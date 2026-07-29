@@ -171,7 +171,7 @@ class AdaptiveNavigationPolicy:
             self._observation,
         )
         return TaskInferenceMetrics(
-            information_gain_proxy=min(float(information_gain), 2.0),
+            information_gain_proxy=float(information_gain),
             prediction_error=prediction_error,
             inference_latency_ms=self._latency_ms,
         )

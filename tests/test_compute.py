@@ -4,11 +4,14 @@ import pytest
 
 from active_inference_meta import (
     ComputeResourceObservation,
+    CpuTimesSnapshot,
+    ExternalCpuAvailabilitySource,
     FixedComputeResourceSource,
     MetaObservationBuilder,
     ModelResolution,
     PsutilComputeResourceSource,
     TaskInferenceMetrics,
+    external_cpu_utilization,
 )
 
 
@@ -32,42 +35,71 @@ def test_compute_observation_validates_percentage_and_freshness():
         ComputeResourceObservation(cpu_availability=101.0, measured_at=10.0)
 
 
-def test_psutil_source_converts_utilization_and_uses_median_window():
-    source = PsutilComputeResourceSource(
+def snapshot(at, total, idle, agent):
+    return CpuTimesSnapshot(at, total, idle, agent)
+
+
+def test_external_utilization_subtracts_agent_process_cpu():
+    utilization = external_cpu_utilization(
+        snapshot(1.0, 1000.0, 500.0, 20.0),
+        snapshot(2.0, 1400.0, 700.0, 100.0),
+    )
+
+    # System busy=200, agent busy=80, external busy=120 of 400 CPU-seconds.
+    assert utilization == pytest.approx(30.0)
+
+
+def test_external_source_uses_independent_samples_and_median_window():
+    source = ExternalCpuAvailabilitySource(
         median_window=3,
         timeout_seconds=10.0,
-        utilization_sampler=Sequence(20.0, 80.0, 50.0, 10.0),
-        clock=Sequence(1.0, 2.0, 3.0, 4.0),
+        snapshot_sampler=Sequence(
+            snapshot(0.0, 0.0, 0.0, 0.0),
+            snapshot(1.0, 100.0, 20.0, 0.0),
+            snapshot(2.0, 200.0, 100.0, 0.0),
+            snapshot(3.0, 300.0, 150.0, 0.0),
+        ),
+        clock=lambda: 3.0,
+        autostart=False,
     )
 
-    assert source.read().cpu_availability == 80.0
-    assert source.read().cpu_availability == 50.0
-    assert source.read().cpu_availability == 50.0
+    assert source.sample_once().cpu_availability == 20.0
+    assert source.sample_once().cpu_availability == 50.0
+    assert source.sample_once().cpu_availability == 50.0
     assert source.read().cpu_availability == 50.0
 
 
-def test_psutil_source_discards_samples_outside_timeout():
-    source = PsutilComputeResourceSource(
+def test_external_source_discards_samples_outside_timeout():
+    source = ExternalCpuAvailabilitySource(
         median_window=3,
         timeout_seconds=1.0,
-        utilization_sampler=Sequence(20.0, 90.0),
-        clock=Sequence(1.0, 3.0),
+        snapshot_sampler=Sequence(
+            snapshot(0.0, 0.0, 0.0, 0.0),
+            snapshot(1.0, 100.0, 80.0, 0.0),
+            snapshot(3.0, 300.0, 100.0, 0.0),
+        ),
+        clock=lambda: 3.0,
+        autostart=False,
     )
 
-    assert source.read().cpu_availability == 80.0
-    assert source.read().cpu_availability == 10.0
+    source.sample_once()
+    assert source.sample_once().cpu_availability == 10.0
 
 
-def test_psutil_source_rejects_invalid_samples_and_configuration():
+def test_external_source_rejects_invalid_samples_and_configuration():
     with pytest.raises(ValueError, match="median window"):
         PsutilComputeResourceSource(median_window=0)
 
-    source = PsutilComputeResourceSource(
-        utilization_sampler=lambda: -1.0,
+    source = ExternalCpuAvailabilitySource(
+        snapshot_sampler=Sequence(
+            snapshot(0.0, 10.0, 5.0, 0.0),
+            snapshot(1.0, 10.0, 5.0, 0.0),
+        ),
         clock=lambda: 1.0,
+        autostart=False,
     )
-    with pytest.raises(ValueError, match="utilization"):
-        source.read()
+    with pytest.raises(ValueError, match="must increase"):
+        source.sample_once()
 
 
 def test_fixed_compute_source_can_reject_stale_observation():

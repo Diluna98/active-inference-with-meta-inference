@@ -18,12 +18,17 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.navigation.topics.rssi == "/tb4_08/rssi"
     assert config.navigation.topics.cmd_vel == "/tb4_08/cmd_vel"
     assert config.adaptive.candidate_resolutions == (2, 5, 10, 20)
-    assert config.compute.provider == "psutil"
+    assert config.compute.provider == "external_psutil"
+    assert config.compute.sample_interval_seconds == 0.25
     assert config.navigation.active_inference.temporal_horizon == 3
     assert config.meta_agent.learning_A is True
     assert config.meta_agent.learning_rate == 0.1
     assert config.meta_likelihood.mu_err.shape == (4, 4)
     assert config.meta_likelihood.mu_cpu.tolist() == [20.0, 57.5, 87.5]
+    assert config.meta_observation_bounds.information_gain_proxy == (0.0, 2.0)
+    assert config.meta_observation_bounds.prediction_error == (2.0, 10.0)
+    assert config.meta_observation_bounds.inference_latency_ms == (50.0, 9000.0)
+    assert config.meta_observation_bounds.cpu_availability == (0.0, 100.0)
     assert config.adaptive.enabled is True
     assert config.profiling.enabled is False
     assert config.visualization.enabled is False

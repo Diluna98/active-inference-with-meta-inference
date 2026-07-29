@@ -23,21 +23,29 @@ from active_inference_navigation.config import (
 
 from .controller import MetaInferenceConfig
 from .likelihood import MetaLikelihoodParameters
+from .models import MetaObservationBounds
 
 
 @dataclass(frozen=True)
 class ComputeConfig:
-    """Processor observation settings."""
+    """External processor-availability observation settings."""
 
-    provider: str = "psutil"
+    provider: str = "external_psutil"
     median_window: int = 5
     timeout_seconds: float = 2.0
+    sample_interval_seconds: float = 0.25
 
     def __post_init__(self) -> None:
-        if self.provider != "psutil":
-            raise ValueError("The initial real-world compute provider must be 'psutil'.")
-        if self.median_window < 1 or self.timeout_seconds <= 0.0:
-            raise ValueError("Compute window and timeout must be positive.")
+        if self.provider not in {"external_psutil", "psutil"}:
+            raise ValueError(
+                "The real-world compute provider must be 'external_psutil'."
+            )
+        if (
+            self.median_window < 1
+            or self.timeout_seconds <= 0.0
+            or self.sample_interval_seconds <= 0.0
+        ):
+            raise ValueError("Compute window, timeout, and sample interval must be positive.")
 
 
 @dataclass(frozen=True)
@@ -116,6 +124,9 @@ class MetaRuntimeConfig:
     meta_likelihood: MetaLikelihoodParameters = field(
         default_factory=MetaLikelihoodParameters.from_json
     )
+    meta_observation_bounds: MetaObservationBounds = field(
+        default_factory=MetaObservationBounds
+    )
     profiling: ProfilingConfig = field(default_factory=ProfilingConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
 
@@ -169,6 +180,9 @@ def _parse(data: Any) -> MetaRuntimeConfig:
             MetaLikelihoodParameters.from_mapping(_section(data, "meta_likelihood"))
             if "meta_likelihood" in data
             else MetaLikelihoodParameters.from_json()
+        ),
+        meta_observation_bounds=MetaObservationBounds.from_mapping(
+            _section(data, "meta_observation_bounds")
         ),
         profiling=ProfilingConfig(**profiling_data),
         visualization=VisualizationConfig(**visualization_data),

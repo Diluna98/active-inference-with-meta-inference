@@ -58,6 +58,11 @@ meta_agent:
   learning_A: true
   learning_rate: 0.1
   forgetting_rate: 0.95
+meta_observation_bounds:
+  information_gain_proxy: [0.0, 2.0]
+  prediction_error: [2.0, 10.0]
+  inference_latency_ms: [50.0, 9000.0]
+  cpu_availability: [0.0, 100.0]
 meta_likelihood:
   mu_information: [0.02, 0.1, 0.5, 3.0]
   sigma_information: [0.02, 0.015, 0.08, 0.4]
@@ -94,9 +99,10 @@ meta_likelihood:
   mu_cpu: [20.0, 57.5, 87.5]
   sigma_cpu: [8.0, 10.0, 8.0]
 compute:
-  provider: psutil
+  provider: external_psutil
   median_window: 5
   timeout_seconds: 2.0
+  sample_interval_seconds: 0.25
 termination:
   provider: persistent_rssi
   rssi_threshold: -62.0
