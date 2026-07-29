@@ -35,6 +35,9 @@ class DeepTaskAgentSpy:
     def __init__(self):
         self.reset_count = 0
         self.stepped_at = []
+        self.pD = [None, None, np.full(4, 0.25)]
+        self.bayesian_mod_avg = np.empty((3, 3), dtype=object)
+        self.bayesian_mod_avg[2, 2] = np.asarray([0.1, 0.2, 0.6, 0.1])
 
     def reset(self):
         self.reset_count += 1
@@ -111,4 +114,5 @@ def test_completed_deep_horizon_resets_without_advancing_task_agent():
 
     assert agent.stepped_at == [0]
     assert agent.reset_count == 1
+    assert np.allclose(agent.pD[2], [0.1, 0.2, 0.6, 0.1])
     assert policy._time_step == 3

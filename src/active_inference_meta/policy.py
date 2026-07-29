@@ -179,6 +179,8 @@ class AdaptiveNavigationPolicy:
     def _advance_task_time(self) -> None:
         phase = self._time_step % self._agent.temporal_horizon
         if phase == self._agent.temporal_horizon - 1:
+            source_prior = self.source_belief.copy()
+            self._agent.pD[2] = source_prior
             self._agent.reset()
         else:
             self._agent.step_time(self._time_step)
