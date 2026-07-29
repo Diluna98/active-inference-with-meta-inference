@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from statistics import median
 from threading import Event, Lock, Thread
 from time import monotonic
-from typing import Self
 
 import numpy as np
 
@@ -225,13 +224,6 @@ class ExternalCpuAvailabilitySource:
     def _discard_stale_locked(self, now: float) -> None:
         while self._samples and now - self._samples[0][0] > self.timeout_seconds:
             self._samples.popleft()
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        self.close()
-
 
 # Backwards-compatible import name. Its semantics are now explicitly external:
 # unlike the pre-0.1.3 implementation, it excludes this program's CPU workload.
