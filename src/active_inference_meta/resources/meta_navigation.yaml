@@ -58,6 +58,10 @@ meta_agent:
   learning_A: true
   learning_rate: 0.1
   forgetting_rate: 0.95
+meta_learning:
+  checkpoint: learned_meta_likelihood.yaml
+  load_if_available: true
+  save_on_exit: true
 meta_observation_bounds:
   information_gain_proxy: [0.0, 2.0]
   prediction_error: [2.0, 10.0]

@@ -1,13 +1,23 @@
+from dataclasses import replace
+
+import numpy as np
 import pytest
 
 from active_inference_meta.config import (
     AdaptiveConfig,
     ComputeConfig,
+    MetaLearningCheckpointConfig,
     MetaRuntimeConfig,
     ProfilingConfig,
     load_default_meta_runtime_config,
+    load_meta_runtime_config,
 )
-from active_inference_meta.ros_runtime import build_adaptive_policy, build_parser
+from active_inference_meta.ros_runtime import (
+    build_adaptive_policy,
+    build_parser,
+    load_configured_meta_likelihood,
+    save_learned_meta_likelihood,
+)
 
 
 def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
@@ -29,6 +39,9 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.meta_observation_bounds.prediction_error == (2.0, 10.0)
     assert config.meta_observation_bounds.inference_latency_ms == (50.0, 9000.0)
     assert config.meta_observation_bounds.cpu_availability == (0.0, 100.0)
+    assert config.meta_learning.checkpoint.name == "learned_meta_likelihood.yaml"
+    assert config.meta_learning.load_if_available is True
+    assert config.meta_learning.save_on_exit is True
     assert config.adaptive.enabled is True
     assert config.profiling.enabled is False
     assert config.visualization.enabled is False
@@ -38,10 +51,71 @@ def test_policy_building_does_not_require_ros_imports():
     config = load_default_meta_runtime_config()
     policy = build_adaptive_policy(config)
 
-    assert policy.active_resolution == 10
-    assert policy.meta_controller.config.learning_A is True
-    assert policy.meta_controller.likelihood_model.parameters is config.meta_likelihood
-    assert build_parser().parse_args([]).planning_windows == 20
+    try:
+        assert policy.active_resolution == 10
+        assert policy.meta_controller.config.learning_A is True
+        assert np.array_equal(
+            policy.meta_controller.likelihood_model.parameters.mu_err,
+            config.meta_likelihood.mu_err,
+        )
+        assert (
+            policy.meta_controller.likelihood_model.parameters
+            is not config.meta_likelihood
+        )
+        assert build_parser().parse_args([]).planning_windows == 20
+    finally:
+        policy.compute_source.close()
+
+
+def test_checkpoint_is_preferred_and_saved_parameters_round_trip(tmp_path):
+    base = load_default_meta_runtime_config()
+    checkpoint = tmp_path / "learned.yaml"
+    learned = load_configured_meta_likelihood(base)
+    learned.mu_cpu[2] = 91.25
+    learned.save_yaml(checkpoint)
+    config = replace(
+        base,
+        meta_learning=MetaLearningCheckpointConfig(checkpoint=checkpoint),
+    )
+
+    loaded = load_configured_meta_likelihood(config)
+    assert loaded.mu_cpu[2] == 91.25
+
+    policy = build_adaptive_policy(config)
+    try:
+        policy.meta_controller.likelihood_model.parameters.mu_cpu[2] = 92.5
+        assert save_learned_meta_likelihood(policy, config) is True
+    finally:
+        policy.compute_source.close()
+
+    assert load_configured_meta_likelihood(config).mu_cpu[2] == 92.5
+
+
+def test_missing_checkpoint_falls_back_to_main_yaml_priors(tmp_path):
+    base = load_default_meta_runtime_config()
+    config = replace(
+        base,
+        meta_learning=MetaLearningCheckpointConfig(
+            checkpoint=tmp_path / "missing.yaml"
+        ),
+    )
+
+    loaded = load_configured_meta_likelihood(config)
+
+    assert np.array_equal(loaded.mu_lat, base.meta_likelihood.mu_lat)
+    assert loaded is not base.meta_likelihood
+
+
+def test_relative_checkpoint_is_resolved_from_main_config(tmp_path):
+    config_path = tmp_path / "navigation.yaml"
+    config_path.write_text(
+        "meta_learning:\n  checkpoint: state/learned.yaml\n",
+        encoding="utf-8",
+    )
+
+    config = load_meta_runtime_config(config_path)
+
+    assert config.meta_learning.checkpoint == tmp_path / "state/learned.yaml"
 
 
 def test_invalid_compute_configuration_is_rejected():

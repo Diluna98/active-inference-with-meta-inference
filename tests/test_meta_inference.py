@@ -24,6 +24,14 @@ def test_packaged_likelihood_parameters_have_expected_shapes():
     assert parameters.sigma_lat.shape == (4, 3)
 
 
+def test_meta_likelihood_yaml_checkpoint_rejects_invalid_content(tmp_path):
+    checkpoint = tmp_path / "invalid.yaml"
+    checkpoint.write_text("meta_likelihood:\n  mu_err: []\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid meta-likelihood checkpoint"):
+        MetaLikelihoodParameters.from_yaml(checkpoint)
+
+
 def test_meta_likelihood_modalities_are_finite_and_nonnegative():
     likelihood = MetaLikelihood()
     observations = (0.05, 2.4, 80.0, 87.5)

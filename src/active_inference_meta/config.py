@@ -114,6 +114,19 @@ class VisualizationConfig:
 
 
 @dataclass(frozen=True)
+class MetaLearningCheckpointConfig:
+    """Persistence settings for learned continuous likelihood parameters."""
+
+    checkpoint: Path = Path("learned_meta_likelihood.yaml")
+    load_if_available: bool = True
+    save_on_exit: bool = True
+
+    def __post_init__(self) -> None:
+        if not str(self.checkpoint):
+            raise ValueError("A meta-learning checkpoint path is required.")
+
+
+@dataclass(frozen=True)
 class MetaRuntimeConfig:
     """Complete configuration for adaptive real-world navigation."""
 
@@ -129,6 +142,9 @@ class MetaRuntimeConfig:
     )
     profiling: ProfilingConfig = field(default_factory=ProfilingConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
+    meta_learning: MetaLearningCheckpointConfig = field(
+        default_factory=MetaLearningCheckpointConfig
+    )
 
     def __post_init__(self) -> None:
         if self.profiling.enabled and self.adaptive.enabled:
@@ -145,7 +161,7 @@ def _section(data: dict[str, Any], key: str) -> dict[str, Any]:
     return value
 
 
-def _parse(data: Any) -> MetaRuntimeConfig:
+def _parse(data: Any, *, base_directory: Path | None = None) -> MetaRuntimeConfig:
     if not isinstance(data, dict):
         raise TypeError("Meta-navigation configuration must be a YAML mapping.")
     navigation = NavigationConfig(
@@ -171,6 +187,13 @@ def _parse(data: Any) -> MetaRuntimeConfig:
     visualization_data = _section(data, "visualization")
     if "output" in visualization_data:
         visualization_data["output"] = Path(visualization_data["output"])
+    meta_learning_data = _section(data, "meta_learning")
+    checkpoint = Path(
+        meta_learning_data.get("checkpoint", "learned_meta_likelihood.yaml")
+    )
+    if not checkpoint.is_absolute() and base_directory is not None:
+        checkpoint = base_directory / checkpoint
+    meta_learning_data["checkpoint"] = checkpoint
     return MetaRuntimeConfig(
         navigation=navigation,
         adaptive=AdaptiveConfig(**adaptive_data),
@@ -186,18 +209,26 @@ def _parse(data: Any) -> MetaRuntimeConfig:
         ),
         profiling=ProfilingConfig(**profiling_data),
         visualization=VisualizationConfig(**visualization_data),
+        meta_learning=MetaLearningCheckpointConfig(**meta_learning_data),
     )
 
 
 def load_meta_runtime_config(path: str | Path) -> MetaRuntimeConfig:
     """Load an explicit adaptive-navigation YAML file."""
 
-    with Path(path).open(encoding="utf-8") as stream:
-        return _parse(yaml.safe_load(stream) or {})
+    config_path = Path(path).resolve()
+    with config_path.open(encoding="utf-8") as stream:
+        return _parse(
+            yaml.safe_load(stream) or {},
+            base_directory=config_path.parent,
+        )
 
 
 def load_default_meta_runtime_config() -> MetaRuntimeConfig:
     """Load the adaptive-navigation YAML bundled with the package."""
 
     resource = files("active_inference_meta.resources").joinpath("meta_navigation.yaml")
-    return _parse(yaml.safe_load(resource.read_text(encoding="utf-8")) or {})
+    return _parse(
+        yaml.safe_load(resource.read_text(encoding="utf-8")) or {},
+        base_directory=Path.cwd(),
+    )

@@ -280,6 +280,24 @@ meta-observation is clipped to them immediately before state inference and
 online likelihood learning, so an outlier cannot update the model outside its
 configured support. Profiling still records the raw task and CPU measurements.
 
+Learned prediction-error and latency likelihood parameters can persist across
+robot trials:
+
+```yaml
+meta_learning:
+  checkpoint: learned_meta_likelihood.yaml
+  load_if_available: true
+  save_on_exit: true
+```
+
+For an explicit main configuration file, a relative checkpoint path is
+resolved relative to that configuration file. At startup, an existing
+checkpoint replaces the `meta_likelihood` priors from the main YAML. If the
+checkpoint does not exist, the main-YAML priors are used. Updated parameters
+are atomically saved on runtime exit when meta-inference and likelihood
+learning are enabled. Delete or rename the checkpoint to deliberately restart
+from the priors.
+
 Before each physical trial:
 
 1. Clear the arena and ensure the emergency stop is accessible.
