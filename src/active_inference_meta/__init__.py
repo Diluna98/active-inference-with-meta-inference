@@ -21,7 +21,11 @@ from .compute import (
 from .controller import MetaInferenceConfig, MetaInferenceController
 from .experiment import load_trace, run_meta_trace
 from .interfaces import ComputeResourceSource, MetaObservationSource
-from .likelihood import MetaLikelihood, MetaLikelihoodParameters
+from .likelihood import (
+    MetaLikelihood,
+    MetaLikelihoodParameters,
+    MetaPreferenceParameters,
+)
 from .models import (
     ComputeResourceObservation,
     MetaObservation,
@@ -52,6 +56,7 @@ __all__ = [
     "MetaObservationBounds",
     "MetaObservationBuilder",
     "MetaObservationSource",
+    "MetaPreferenceParameters",
     "ModelResolution",
     "PsutilComputeResourceSource",
     "TaskInferenceMetrics",

@@ -8,6 +8,7 @@ from active_inference_meta import (
     MetaLikelihoodParameters,
     MetaObservation,
     MetaObservationBounds,
+    MetaPreferenceParameters,
     load_trace,
     run_meta_trace,
 )
@@ -120,6 +121,41 @@ def test_meta_preferences_match_configured_utility_equations():
 
     assert np.allclose(np.exp(likelihood.log_preferences[(0, 1)]), joint_probability)
     assert np.allclose(np.exp(likelihood.log_preferences[2]), latency_probability)
+
+
+def test_meta_preference_parameters_change_joint_error_and_latency_preferences():
+    baseline = MetaLikelihood()
+    configured = MetaLikelihood(
+        preferences=MetaPreferenceParameters(
+            error_base_weight=5.0,
+            error_context_weight=2.0,
+            context_gate_center=0.7,
+            context_gate_steepness=3.0,
+            latency_comfort_ms=1000.0,
+            latency_deadline_ms=1500.0,
+            latency_linear_weight=0.5,
+            latency_excess_weight=1.0,
+        )
+    )
+
+    assert not np.allclose(
+        baseline.log_preferences[(0, 1)],
+        configured.log_preferences[(0, 1)],
+    )
+    assert not np.allclose(
+        baseline.log_preferences[2],
+        configured.log_preferences[2],
+    )
+
+
+def test_invalid_meta_preference_parameters_are_rejected():
+    with pytest.raises(ValueError, match="context_gate_center"):
+        MetaPreferenceParameters(context_gate_center=1.1)
+    with pytest.raises(ValueError, match="deadline"):
+        MetaPreferenceParameters(
+            latency_comfort_ms=800.0,
+            latency_deadline_ms=800.0,
+        )
 
 
 def test_meta_online_learning_updates_error_and_latency_parameters():

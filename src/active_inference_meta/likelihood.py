@@ -24,6 +24,49 @@ def _softmax(values: np.ndarray, axis: int = 0, gamma: float = 1.0) -> np.ndarra
 
 
 @dataclass(frozen=True)
+class MetaPreferenceParameters:
+    """Configurable utilities for continuous meta-observation outcomes."""
+
+    error_base_weight: float = 20.0
+    error_context_weight: float = 15.0
+    context_gate_center: float = 0.45
+    context_gate_steepness: float = 6.0
+    latency_comfort_ms: float = 600.0
+    latency_deadline_ms: float = 800.0
+    latency_linear_weight: float = 1.0
+    latency_excess_weight: float = 2.0
+
+    def __post_init__(self) -> None:
+        values = np.asarray(
+            [getattr(self, name) for name in self.__annotations__],
+            dtype=float,
+        )
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Meta-preference parameters must be finite.")
+        if self.error_base_weight < 0.0 or self.error_context_weight < 0.0:
+            raise ValueError("Prediction-error preference weights must be non-negative.")
+        if not 0.0 <= self.context_gate_center <= 1.0:
+            raise ValueError("context_gate_center must lie in [0, 1].")
+        if self.context_gate_steepness <= 0.0:
+            raise ValueError("context_gate_steepness must be positive.")
+        if (
+            self.latency_comfort_ms < 0.0
+            or self.latency_deadline_ms <= self.latency_comfort_ms
+        ):
+            raise ValueError(
+                "Latency deadline must be greater than the non-negative comfort value."
+            )
+        if self.latency_linear_weight < 0.0 or self.latency_excess_weight < 0.0:
+            raise ValueError("Latency preference weights must be non-negative.")
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> MetaPreferenceParameters:
+        """Build preference parameters from the main YAML configuration."""
+
+        return cls(**data)
+
+
+@dataclass(frozen=True)
 class MetaLikelihoodParameters:
     """YAML/JSON-configurable priors for the meta-generative model."""
 
@@ -174,10 +217,12 @@ class MetaLikelihood:
         *,
         grid_size: int = 100,
         observation_bounds: MetaObservationBounds | None = None,
+        preferences: MetaPreferenceParameters | None = None,
     ) -> None:
         self.parameters = parameters or MetaLikelihoodParameters.from_json()
         self.grid_size = int(grid_size)
         self.observation_bounds = observation_bounds or MetaObservationBounds()
+        self.preferences = preferences or MetaPreferenceParameters()
         if self.grid_size < 2:
             raise ValueError("grid_size must be at least two.")
 
@@ -197,24 +242,35 @@ class MetaLikelihood:
         )
         normalized_complexity = complexity / max(size - 1, 1)
         normalized_error = prediction_error / max(size - 1, 1)
+        preference = self.preferences
         context_gate = 1.0 / (
-            1.0 + np.exp(-6.0 * (normalized_complexity - 0.45))
+            1.0
+            + np.exp(
+                -preference.context_gate_steepness
+                * (normalized_complexity - preference.context_gate_center)
+            )
         )
         joint_utility = -(
-            20.0 + 15.0 * context_gate
+            preference.error_base_weight
+            + preference.error_context_weight * context_gate
         ) * normalized_error
         joint_probability = _softmax(joint_utility.ravel()).reshape(size, size)
 
         latency_grid = self.get_o_grid(2)
-        comfort_ms = 600.0
-        deadline_ms = 800.0
-        latency_linear = latency_grid / deadline_ms
+        comfort_ms = preference.latency_comfort_ms
+        deadline_ms = preference.latency_deadline_ms
+        latency_linear = (
+            preference.latency_linear_weight * latency_grid / deadline_ms
+        )
         latency_excess = np.clip(
             (latency_grid - comfort_ms) / (deadline_ms - comfort_ms),
             0.0,
             None,
         )
-        latency_utility = -(latency_linear + 2.0 * latency_excess**2)
+        latency_utility = -(
+            latency_linear
+            + preference.latency_excess_weight * latency_excess**2
+        )
         latency_probability = _softmax(latency_utility)
 
         return {

@@ -15,7 +15,11 @@ from PyAIF import (
     utils,
 )
 
-from .likelihood import MetaLikelihood, MetaLikelihoodParameters
+from .likelihood import (
+    MetaLikelihood,
+    MetaLikelihoodParameters,
+    MetaPreferenceParameters,
+)
 from .models import MetaObservationBounds
 from .observations import MetaDecision, MetaObservation
 
@@ -77,12 +81,14 @@ class MetaInferenceController:
         *,
         parameters: MetaLikelihoodParameters | None = None,
         observation_bounds: MetaObservationBounds | None = None,
+        preferences: MetaPreferenceParameters | None = None,
     ) -> None:
         self.config = config or MetaInferenceConfig()
         self.observation_bounds = observation_bounds or MetaObservationBounds()
         self.likelihood_model = MetaLikelihood(
             parameters,
             observation_bounds=self.observation_bounds,
+            preferences=preferences,
         )
         controls_dim = (5, 1, 1)
         states_dim = self.likelihood_model.states_dim
@@ -213,4 +219,5 @@ class MetaInferenceController:
             config=self.config,
             parameters=copy.deepcopy(self.likelihood_model.parameters),
             observation_bounds=self.observation_bounds,
+            preferences=self.likelihood_model.preferences,
         )

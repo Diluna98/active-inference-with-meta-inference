@@ -62,6 +62,15 @@ meta_learning:
   checkpoint: learned_meta_likelihood.yaml
   load_if_available: true
   save_on_exit: true
+meta_preferences:
+  error_base_weight: 20.0
+  error_context_weight: 15.0
+  context_gate_center: 0.45
+  context_gate_steepness: 6.0
+  latency_comfort_ms: 600.0
+  latency_deadline_ms: 800.0
+  latency_linear_weight: 1.0
+  latency_excess_weight: 2.0
 meta_observation_bounds:
   information_gain_proxy: [0.0, 0.2]
   prediction_error: [20.0, 35.0]

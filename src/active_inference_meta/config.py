@@ -22,7 +22,7 @@ from active_inference_navigation.config import (
 )
 
 from .controller import MetaInferenceConfig
-from .likelihood import MetaLikelihoodParameters
+from .likelihood import MetaLikelihoodParameters, MetaPreferenceParameters
 from .models import MetaObservationBounds
 
 
@@ -140,6 +140,9 @@ class MetaRuntimeConfig:
     meta_observation_bounds: MetaObservationBounds = field(
         default_factory=MetaObservationBounds
     )
+    meta_preferences: MetaPreferenceParameters = field(
+        default_factory=MetaPreferenceParameters
+    )
     profiling: ProfilingConfig = field(default_factory=ProfilingConfig)
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
     meta_learning: MetaLearningCheckpointConfig = field(
@@ -206,6 +209,9 @@ def _parse(data: Any, *, base_directory: Path | None = None) -> MetaRuntimeConfi
         ),
         meta_observation_bounds=MetaObservationBounds.from_mapping(
             _section(data, "meta_observation_bounds")
+        ),
+        meta_preferences=MetaPreferenceParameters.from_mapping(
+            _section(data, "meta_preferences")
         ),
         profiling=ProfilingConfig(**profiling_data),
         visualization=VisualizationConfig(**visualization_data),

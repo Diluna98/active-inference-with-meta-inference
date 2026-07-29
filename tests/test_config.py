@@ -42,6 +42,10 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.meta_learning.checkpoint.name == "learned_meta_likelihood.yaml"
     assert config.meta_learning.load_if_available is True
     assert config.meta_learning.save_on_exit is True
+    assert config.meta_preferences.error_base_weight == 20.0
+    assert config.meta_preferences.error_context_weight == 15.0
+    assert config.meta_preferences.latency_comfort_ms == 600.0
+    assert config.meta_preferences.latency_deadline_ms == 800.0
     assert config.adaptive.enabled is True
     assert config.profiling.enabled is False
     assert config.visualization.enabled is False

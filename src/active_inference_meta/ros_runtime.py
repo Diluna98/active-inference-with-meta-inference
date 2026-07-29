@@ -143,6 +143,7 @@ def build_adaptive_policy(
             ),
             parameters=load_configured_meta_likelihood(config),
             observation_bounds=config.meta_observation_bounds,
+            preferences=config.meta_preferences,
         ),
         meta_inference_enabled=adaptive.enabled,
         observation_sink=observation_sink,

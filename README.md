@@ -280,6 +280,27 @@ meta-observation is clipped to them immediately before state inference and
 online likelihood learning, so an outlier cannot update the model outside its
 configured support. Profiling still records the raw task and CPU measurements.
 
+Meta-level outcome preferences are configurable independently of likelihood
+priors:
+
+```yaml
+meta_preferences:
+  error_base_weight: 20.0
+  error_context_weight: 15.0
+  context_gate_center: 0.45
+  context_gate_steepness: 6.0
+  latency_comfort_ms: 600.0
+  latency_deadline_ms: 800.0
+  latency_linear_weight: 1.0
+  latency_excess_weight: 2.0
+```
+
+Prediction error has a joint preference with the observed information-gain
+proxy. The sigmoid context gate makes high prediction error increasingly
+undesirable as information gain indicates a more complex latent context.
+Latency has a separate preference with a linear cost and an additional
+quadratic penalty above the comfort threshold.
+
 Learned prediction-error and latency likelihood parameters can persist across
 robot trials:
 
