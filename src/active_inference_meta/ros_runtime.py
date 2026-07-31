@@ -200,6 +200,8 @@ def run_ros_meta_navigation(
         yaw_tolerance=nav.motion.yaw_tolerance,
         control_period=nav.motion.control_period,
         action_timeout=nav.motion.action_timeout,
+        final_heading=nav.motion.final_heading,
+        settling_time=nav.motion.settling_time,
         shutdown_requested=lambda: not rclpy.ok(),
     )
     profile_logger = (
