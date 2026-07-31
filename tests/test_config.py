@@ -52,7 +52,11 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.meta_preferences.latency_deadline_ms == 800.0
     assert config.adaptive.enabled is True
     assert config.profiling.enabled is False
-    assert config.visualization.enabled is False
+    assert config.visualization.enabled is True
+    assert config.visualization.mode == "dashboard"
+    assert config.visualization.host == "0.0.0.0"
+    assert config.visualization.port == 8000
+    assert config.visualization.ground_truth_source_x == pytest.approx(2.975)
 
 
 def test_policy_building_does_not_require_ros_imports():

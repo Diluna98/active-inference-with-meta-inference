@@ -57,7 +57,7 @@ Issues = "https://github.com/Diluna98/active-inference-with-meta-inference/issue
 where = ["src"]
 
 [tool.setuptools.package-data]
-active_inference_meta = ["data/*.json", "resources/*.yaml"]
+active_inference_meta = ["data/*.json", "resources/*.html", "resources/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

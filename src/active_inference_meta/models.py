@@ -149,6 +149,46 @@ class TaskInferenceMetrics:
             raise ValueError("Inference latency must be nonnegative.")
 
 
+@dataclass(frozen=True)
+class TaskTelemetry:
+    """One immutable, hardware-independent dashboard update."""
+
+    step: int
+    resolution: int
+    belief: np.ndarray
+    robot_x: float
+    robot_y: float
+    rssi: float
+    selected_action: tuple[int, int] | None
+    inference_latency_ms: float
+    meta_observation: MetaObservation | None = None
+    meta_observation_step: int | None = None
+    selected_resolution: int | None = None
+    model_switched: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.step < 0 or self.resolution < 1:
+            raise ValueError("Telemetry step and resolution must be valid.")
+        belief = np.asarray(self.belief, dtype=float)
+        if belief.shape != (self.resolution**2,):
+            raise ValueError("Telemetry belief size must match its resolution.")
+        if not np.all(np.isfinite(belief)) or np.any(belief < 0.0) or belief.sum() <= 0.0:
+            raise ValueError("Telemetry belief must be a valid probability vector.")
+        values = (self.robot_x, self.robot_y, self.rssi, self.inference_latency_ms)
+        if not np.all(np.isfinite(values)) or self.inference_latency_ms < 0.0:
+            raise ValueError("Telemetry measurements must be finite and latency nonnegative.")
+        if self.selected_action is not None:
+            action = tuple(int(value) for value in self.selected_action)
+            if len(action) != 2 or action not in ((0, 0), (1, 0), (2, 0), (0, 1), (0, 2)):
+                raise ValueError("Telemetry action must be a cardinal navigation action.")
+            object.__setattr__(self, "selected_action", action)
+        if (self.meta_observation is None) != (self.meta_observation_step is None):
+            raise ValueError("Meta observation and its step must be provided together.")
+        if self.selected_resolution is not None and self.selected_resolution < 1:
+            raise ValueError("Selected resolution must be positive.")
+        object.__setattr__(self, "belief", belief.copy() / belief.sum())
+
+
 @dataclass(frozen=True, order=True)
 class ModelResolution:
     """Spatial dimensions of one candidate task-agent representation."""

@@ -386,9 +386,60 @@ Repeat with fixed resolutions `2`, `5`, `10`, and `20`, using a different
 output filename for each run. Existing non-empty output files are appended, so
 use a new filename when trials must remain separate.
 
-## View the goal belief on the metric arena
+## Live browser dashboard
 
-Enable the asynchronous map renderer in the runtime YAML:
+The packaged robot configuration enables a lightweight telemetry server:
+
+```yaml
+visualization:
+  enabled: true
+  mode: dashboard
+  refresh_steps: 1
+  host: 0.0.0.0
+  port: 8000
+  history_limit: 500
+  ground_truth_source_x: 2.975
+  ground_truth_source_y: 4.375
+```
+
+While `active-inference-meta-ros` is running, open:
+
+```text
+http://192.168.50.68:8000/
+```
+
+The dashboard shows the 7 m by 7 m arena with x horizontal, y vertical, and
+the origin at the lower-left. It includes the live goal-belief heatmap, robot
+trajectory, fixed positive-x observation heading, MAP estimate, optional BLE
+ground truth, task resolution, selected action, median RSSI, task-inference
+latency, external CPU availability, prediction error, information proxy, and
+meta-model decision. The belief grid automatically changes when meta-inference
+switches between 2x2, 5x5, 10x10, and 20x20 representations.
+
+The ground-truth marker is an evaluation overlay only and never enters task or
+meta inference. Remove both `ground_truth_source_*` fields to hide it.
+
+For an ICRA demo recording, add the URL as an OBS Browser Source beside the
+real camera feed. A 1280x720 browser source is suitable for a side-by-side
+layout. If port 8000 is not directly reachable, create an SSH tunnel on the
+Windows computer:
+
+```powershell
+ssh -L 8000:localhost:8000 ubuntu@192.168.50.68
+```
+
+Then open `http://localhost:8000/`.
+
+Telemetry is submitted only after `infer_states()` has stopped its latency
+timer. Submission uses a one-frame non-blocking queue; stale frames are dropped
+instead of delaying inference. HTML canvas rendering occurs in the laptop
+browser, not on the TurtleBot. The robot performs only JSON serialization and
+HTTP serving, and this process load is excluded from the external CPU-load
+signal.
+
+## Legacy belief views
+
+The atomic PNG renderer remains available:
 
 ```yaml
 visualization:
@@ -397,15 +448,6 @@ visualization:
   refresh_steps: 1
   output: goal_belief.png
 ```
-
-The PNG is replaced atomically after each accepted frame. It shows the arena
-dimensions from YAML (7 m by 7 m in the packaged configuration), with arena x
-horizontal, arena y vertical, and `(0, 0)` at the lower-left. The heatmap is
-the task-level source/goal posterior, the blue circle is the current robot
-position, and the green star is the maximum-posterior goal cell.
-
-The actual grid uses the active resolution, so it automatically changes when
-meta-inference switches between 2x2, 5x5, 10x10, and 20x20 models.
 
 Open `goal_belief.png` through an SSH-aware editor such as VS Code Remote SSH,
 or copy it to the local computer while the run is active. A compact SSH
@@ -419,13 +461,9 @@ visualization:
   clear_terminal: true
 ```
 
-Belief snapshots are copied only after `infer_states()` has finished and are
-rendered by a background worker. Queue submission never waits; if rendering
-falls behind, an old frame is discarded. Rendering time is therefore not
-included in `inference_latency_ms`. Rendering still consumes a small amount of
-processor time and can consequently influence the separately measured CPU
-availability. For calibration-quality CPU experiments, either disable the
-visualization or use a larger `refresh_steps`, such as `5`.
+The PNG mode uses Matplotlib on the robot. For calibration-quality profiling,
+prefer the browser dashboard, disable visualization, or use a larger
+`refresh_steps`, such as `5`.
 
 ## Learned meta-likelihood
 

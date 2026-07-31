@@ -105,12 +105,31 @@ class VisualizationConfig:
     refresh_steps: int = 1
     clear_terminal: bool = True
     output: Path = Path("goal_belief.png")
+    host: str = "0.0.0.0"
+    port: int = 8000
+    history_limit: int = 500
+    ground_truth_source_x: float | None = None
+    ground_truth_source_y: float | None = None
 
     def __post_init__(self) -> None:
-        if self.mode not in ("map", "terminal"):
-            raise ValueError("visualization.mode must be 'map' or 'terminal'.")
+        if self.mode not in ("dashboard", "map", "terminal"):
+            raise ValueError(
+                "visualization.mode must be 'dashboard', 'map', or 'terminal'."
+            )
         if self.refresh_steps < 1:
             raise ValueError("visualization.refresh_steps must be positive.")
+        if not self.host.strip():
+            raise ValueError("visualization.host must not be empty.")
+        if not 0 <= self.port <= 65535:
+            raise ValueError("visualization.port must lie between 0 and 65535.")
+        if self.history_limit < 1:
+            raise ValueError("visualization.history_limit must be positive.")
+        if (self.ground_truth_source_x is None) != (
+            self.ground_truth_source_y is None
+        ):
+            raise ValueError(
+                "Both ground-truth source coordinates must be set together."
+            )
 
 
 @dataclass(frozen=True)

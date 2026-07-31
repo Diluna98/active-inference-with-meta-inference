@@ -20,7 +20,7 @@ from .adaptive_navigation import (
 )
 from .controller import MetaInferenceController
 from .interfaces import ComputeResourceSource
-from .models import MetaObservation, TaskInferenceMetrics
+from .models import MetaObservation, TaskInferenceMetrics, TaskTelemetry
 from .observations import MetaDecision, MetaObservationBuilder
 
 
@@ -39,6 +39,7 @@ class AdaptiveNavigationPolicy:
     meta_inference_enabled: bool = True
     observation_sink: Callable[[int, int, MetaObservation], None] | None = None
     belief_sink: Callable[[int, int, np.ndarray, float, float], None] | None = None
+    telemetry_sink: Callable[[TaskTelemetry], None] | None = None
     decision_sink: Callable[[int, int, MetaDecision], None] | None = None
     clock: Any = perf_counter
     _agent: Any = field(init=False, repr=False)
@@ -48,6 +49,7 @@ class AdaptiveNavigationPolicy:
     _latency_ms: float = field(init=False, default=0.0)
     _last_decision: MetaDecision | None = field(init=False, default=None)
     _last_meta_observation: MetaObservation | None = field(init=False, default=None)
+    _last_meta_observation_step: int | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self._build_initial_agent()
@@ -70,6 +72,7 @@ class AdaptiveNavigationPolicy:
         self._latency_ms = 0.0
         self._last_decision = None
         self._last_meta_observation = None
+        self._last_meta_observation_step = None
 
     def observe(self, observation: Any, *, time_step: int) -> None:
         """Pass one hardware-independent numeric observation to the task agent."""
@@ -119,6 +122,7 @@ class AdaptiveNavigationPolicy:
         if not self.meta_inference_enabled:
             meta_observation = self._build_meta_observation()
             self._last_meta_observation = meta_observation
+            self._last_meta_observation_step = self._time_step
             if self.observation_sink is not None:
                 self.observation_sink(
                     self._time_step,
@@ -128,6 +132,7 @@ class AdaptiveNavigationPolicy:
         elif self._time_step % self.config.meta_interval == 0:
             meta_observation = self._build_meta_observation()
             self._last_meta_observation = meta_observation
+            self._last_meta_observation_step = self._time_step
             current_resolution = self.active_resolution
             decision = self.meta_controller.infer(current_resolution, meta_observation)
             self._last_decision = decision
@@ -144,10 +149,12 @@ class AdaptiveNavigationPolicy:
                     goal_resolution=decision.selected_resolution,
                 )
                 self._emit_belief()
+                self._emit_telemetry(None)
                 self._time_step += 1
                 return None
 
         self._emit_belief()
+        self._emit_telemetry(selected)
         self._advance_task_time()
         return None if selected is None else np.asarray(selected, dtype=int)
 
@@ -163,6 +170,34 @@ class AdaptiveNavigationPolicy:
                 float(self._observation[0]),
                 float(self._observation[1]),
             )
+
+    def _emit_telemetry(self, selected_action: Any) -> None:
+        if self.telemetry_sink is None:
+            return
+        assert self._observation is not None
+        action = None
+        if selected_action is not None:
+            values = np.asarray(selected_action, dtype=int).reshape(-1)
+            action = int(values[0]), int(values[1])
+        decision = self._last_decision
+        self.telemetry_sink(
+            TaskTelemetry(
+                step=self._time_step,
+                resolution=self.active_resolution,
+                belief=self.source_belief.copy(),
+                robot_x=float(self._observation[0]),
+                robot_y=float(self._observation[1]),
+                rssi=float(self._observation[2]),
+                selected_action=action,
+                inference_latency_ms=self._latency_ms,
+                meta_observation=self._last_meta_observation,
+                meta_observation_step=self._last_meta_observation_step,
+                selected_resolution=(
+                    decision.selected_resolution if decision is not None else None
+                ),
+                model_switched=decision.switched if decision is not None else None,
+            )
+        )
 
     def _task_metrics(self) -> TaskInferenceMetrics:
         assert self._observation is not None

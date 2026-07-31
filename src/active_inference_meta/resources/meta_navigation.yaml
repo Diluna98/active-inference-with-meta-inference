@@ -48,11 +48,17 @@ profiling:
   enabled: false
   output: meta_profile.csv
 visualization:
-  enabled: false
-  mode: map
+  enabled: true
+  mode: dashboard
   refresh_steps: 1
   clear_terminal: true
   output: goal_belief.png
+  host: 0.0.0.0
+  port: 8000
+  history_limit: 500
+  # Optional evaluation overlay; this does not enter inference.
+  ground_truth_source_x: 2.975
+  ground_truth_source_y: 4.375
 meta_agent:
   message_passing_iterations: 30
   policy_samples: 500

@@ -74,6 +74,31 @@ def test_adaptive_policy_exposes_navigation_runtime_agent_protocol():
     assert decisions == [(0, 2, 2)]
 
 
+def test_policy_emits_dashboard_telemetry_after_measured_inference():
+    snapshots = []
+    policy = AdaptiveNavigationPolicy(
+        compute_source=FixedComputeResourceSource(
+            ComputeResourceObservation(75.0, measured_at=1.0)
+        ),
+        config=AdaptiveNavigationConfig(maximum_steps=3),
+        meta_controller=KeepResolutionController(),
+        telemetry_sink=snapshots.append,
+        clock=iter((1.0, 1.01)).__next__,
+    )
+    policy.reset()
+    policy.observe(np.asarray([0.5, 1.5, -64.0]), time_step=0)
+    policy.infer_states()
+    policy.infer_policies()
+
+    policy.select_action()
+
+    assert len(snapshots) == 1
+    assert np.isclose(snapshots[0].inference_latency_ms, 10.0)
+    assert snapshots[0].rssi == -64.0
+    assert snapshots[0].meta_observation.cpu_availability == 75.0
+    assert snapshots[0].selected_resolution == 2
+
+
 def test_fixed_resolution_policy_records_without_running_meta_inference():
     records = []
     policy = AdaptiveNavigationPolicy(

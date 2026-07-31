@@ -32,6 +32,7 @@ from .config import (
     load_meta_runtime_config,
 )
 from .controller import MetaInferenceConfig, MetaInferenceController
+from .dashboard import LiveDashboardServer
 from .likelihood import MetaLikelihoodParameters
 from .observations import MetaDecision
 from .policy import AdaptiveNavigationPolicy
@@ -90,6 +91,7 @@ def build_adaptive_policy(
     *,
     observation_sink=None,
     belief_sink=None,
+    telemetry_sink=None,
     decision_sink=None,
 ) -> AdaptiveNavigationPolicy:
     """Build the technology-neutral policy from typed configuration."""
@@ -154,6 +156,7 @@ def build_adaptive_policy(
         meta_inference_enabled=adaptive.enabled,
         observation_sink=observation_sink,
         belief_sink=belief_sink,
+        telemetry_sink=telemetry_sink,
         decision_sink=decision_sink,
     )
 
@@ -216,8 +219,31 @@ def run_ros_meta_navigation(
         else None
     )
     belief_visualizer = None
+    dashboard = None
     if config.visualization.enabled:
-        if config.visualization.mode == "map":
+        if config.visualization.mode == "dashboard":
+            ground_truth = None
+            if config.visualization.ground_truth_source_x is not None:
+                ground_truth = (
+                    config.visualization.ground_truth_source_x,
+                    config.visualization.ground_truth_source_y,
+                )
+            dashboard = LiveDashboardServer(
+                arena_width=nav.grid.width,
+                arena_height=nav.grid.height,
+                host=config.visualization.host,
+                port=config.visualization.port,
+                refresh_steps=config.visualization.refresh_steps,
+                history_limit=config.visualization.history_limit,
+                ground_truth_source=ground_truth,
+            )
+            print(
+                "LIVE dashboard: "
+                f"http://<robot-ip>:{dashboard.port}/ "
+                f"(local {dashboard.url})",
+                flush=True,
+            )
+        elif config.visualization.mode == "map":
             belief_visualizer = AsyncMapBeliefVisualizer(
                 config.visualization.output,
                 arena_width=nav.grid.width,
@@ -239,6 +265,7 @@ def run_ros_meta_navigation(
             if belief_visualizer is not None
             else None
         ),
+        telemetry_sink=dashboard.submit if dashboard is not None else None,
         decision_sink=print_meta_decision,
     )
     runtime = NavigationRuntime(
@@ -267,7 +294,10 @@ def run_ros_meta_navigation(
             raise TimeoutError(
                 "The external CPU sampler did not produce a measurement in time."
             )
-        return runtime.run(planning_windows=planning_windows)
+        result = runtime.run(planning_windows=planning_windows)
+        if dashboard is not None:
+            dashboard.mark_complete(terminated=result.terminated)
+        return result
     finally:
         actuator.stop()
         try:
@@ -280,6 +310,8 @@ def run_ros_meta_navigation(
                 profile_logger.close()
             if belief_visualizer is not None:
                 belief_visualizer.close()
+            if dashboard is not None:
+                dashboard.close()
             _ = subscriptions
 
 
