@@ -56,6 +56,8 @@ def test_dashboard_serves_browser_and_latest_telemetry():
             html = response.read().decode("utf-8")
         assert "Active Inference Navigation" in html
         assert 'fetch("/api/state"' in html
+        assert 'let actionLabel = "NO ACTION"' in html
+        assert "telemetry.meta_decision?.switched" in html
     finally:
         server.close()
 

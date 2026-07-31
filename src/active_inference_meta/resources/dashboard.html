@@ -170,7 +170,7 @@
     }
     .map-panel {
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-rows: minmax(52px, auto) minmax(0, 1fr) minmax(36px, auto);
       min-width: 0;
       min-height: 0;
       padding: 12px;
@@ -181,6 +181,7 @@
       align-items: baseline;
       gap: 10px;
       margin-bottom: 8px;
+      min-width: 0;
     }
     .eyebrow {
       color: var(--accent);
@@ -190,17 +191,24 @@
       text-transform: uppercase;
     }
     .map-title { margin-top: 2px; font-size: 14px; font-weight: 680; }
+    .map-head > div:first-child { min-width: 0; }
+    .map-head > .detail {
+      flex: 0 0 auto;
+      max-width: 48%;
+      text-align: right;
+      white-space: normal;
+    }
     .map-canvas-wrap {
       min-height: 0;
+      min-width: 0;
       display: grid;
       place-items: center;
+      overflow: hidden;
     }
     #map {
       display: block;
-      width: auto;
-      height: 100%;
-      max-width: 100%;
-      max-height: 100%;
+      width: 1px;
+      height: 1px;
       aspect-ratio: 1;
       background: #f1f4f6;
     }
@@ -208,9 +216,11 @@
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
-      margin-top: 8px;
+      align-content: center;
+      margin-top: 6px;
       color: var(--muted);
       font-size: 10px;
+      line-height: 1.2;
     }
     .legend span::before {
       content: "";
@@ -226,7 +236,7 @@
     }
     .telemetry {
       display: grid;
-      grid-template-columns: .65fr 1fr 1fr .8fr 1.1fr .9fr .9fr 1.15fr;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
       min-height: 0;
       border: 1px solid var(--line);
       background: var(--panel);
@@ -243,9 +253,8 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.11em;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
     }
     .value {
       margin-top: 7px;
@@ -259,9 +268,8 @@
       margin-top: 3px;
       color: var(--muted);
       font-size: 10px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
     }
     .accent { color: var(--accent); }
     .good { color: var(--green); }
@@ -368,12 +376,12 @@
           <div class="detail">dBm · five samples</div>
         </article>
         <article class="metric">
-          <div class="label">Task inference latency</div>
+          <div class="label">Task latency</div>
           <div id="latency" class="value">—</div>
           <div class="bar"><i id="latencyBar"></i></div>
         </article>
         <article class="metric">
-          <div class="label">External CPU availability</div>
+          <div class="label">CPU available</div>
           <div id="cpu" class="value good">—</div>
           <div class="bar"><i id="cpuBar"></i></div>
         </article>
@@ -383,7 +391,7 @@
           <div id="metaAge" class="detail">Awaiting meta step</div>
         </article>
         <article class="metric">
-          <div class="label">Information-gain proxy</div>
+          <div class="label">Information gain</div>
           <div id="information" class="value small">—</div>
           <div class="detail">RSSI Fisher-information proxy</div>
         </article>
@@ -423,6 +431,10 @@
     }
 
     function draw(state) {
+      const available = canvas.parentElement.getBoundingClientRect();
+      const size = Math.max(1, Math.floor(Math.min(available.width, available.height)));
+      canvas.style.width = `${size}px`;
+      canvas.style.height = `${size}px`;
       const rect = canvas.getBoundingClientRect();
       const ratio = window.devicePixelRatio || 1;
       canvas.width = Math.round(rect.width * ratio);
@@ -431,7 +443,9 @@
 
       const width = rect.width;
       const height = rect.height;
-      const pad = Math.max(38, width * 0.065);
+      const pad = Math.max(26, Math.min(38, width * 0.12));
+      const tickOffset = Math.min(20, pad * 0.55);
+      const axisOffset = pad - 3;
       const plot = Math.min(width - 2 * pad, height - 2 * pad);
       const left = (width - plot) / 2;
       const top = (height - plot) / 2;
@@ -530,14 +544,14 @@
       for (let i = 0; i <= 7; i++) {
         const x = left + i / 7 * plot;
         const y = top + plot - i / 7 * plot;
-        ctx.fillText((arena.width * i / 7).toFixed(0), x, top + plot + 22);
+        ctx.fillText((arena.width * i / 7).toFixed(0), x, top + plot + tickOffset);
         ctx.textAlign = "right";
-        ctx.fillText((arena.height * i / 7).toFixed(0), left - 10, y + 4);
+        ctx.fillText((arena.height * i / 7).toFixed(0), left - 7, y + 4);
         ctx.textAlign = "center";
       }
-      ctx.fillText("Arena x (m)", left + plot / 2, top + plot + 39);
+      ctx.fillText("Arena x (m)", left + plot / 2, top + plot + axisOffset);
       ctx.save();
-      ctx.translate(left - 34, top + plot / 2);
+      ctx.translate(left - axisOffset, top + plot / 2);
       ctx.rotate(-Math.PI / 2);
       ctx.fillText("Arena y (m)", 0, 0);
       ctx.restore();
@@ -562,7 +576,13 @@
       const actions = {
         "0,0": "STAY", "1,0": "−X", "2,0": "+X", "0,1": "−Y", "0,2": "+Y"
       };
-      text("action", telemetry.selected_action ? actions[telemetry.selected_action.join(",")] : "MODEL SWITCH");
+      let actionLabel = "NO ACTION";
+      if (telemetry.selected_action) {
+        actionLabel = actions[telemetry.selected_action.join(",")] ?? "INVALID";
+      } else if (telemetry.meta_decision?.switched) {
+        actionLabel = "MODEL SWITCH";
+      }
+      text("action", actionLabel);
 
       const belief = telemetry.belief;
       const peak = Math.max(...belief);
@@ -570,7 +590,7 @@
       const px = index % telemetry.resolution;
       const py = Math.floor(index / telemetry.resolution);
       text("mapTitle", `Step ${telemetry.step} · ${telemetry.resolution}×${telemetry.resolution} belief`);
-      text("peak", `MAP cell (${px}, ${py}) · p=${fmt(peak, 4)}`);
+      text("peak", `MAP (${px}, ${py}) · ${fmt(peak, 4)}`);
 
       if (telemetry.meta_decision) {
         const decision = telemetry.meta_decision;
