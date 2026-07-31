@@ -56,9 +56,6 @@ visualization:
   host: 0.0.0.0
   port: 8000
   history_limit: 500
-  # Optional evaluation overlay; this does not enter inference.
-  ground_truth_source_x: 2.975
-  ground_truth_source_y: 4.375
 meta_agent:
   message_passing_iterations: 30
   policy_samples: 500
@@ -127,9 +124,13 @@ compute:
   timeout_seconds: 2.0
   sample_interval_seconds: 0.25
 termination:
-  provider: persistent_rssi
+  # Controlled-demo ground truth; this is not passed to Active Inference.
+  provider: source_distance
   rssi_threshold: -54.0
   consecutive_observations: 3
+  source_x: 2.975
+  source_y: 4.375
+  distance_threshold: 0.45
 likelihood_provider: bearing_calibrated_dbm
 rssi_likelihood:
   # Fit to median-of-five samples with the robot restored to arena +x.

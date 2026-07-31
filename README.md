@@ -254,8 +254,8 @@ The packaged configuration uses:
 - a five-sample RSSI median and five-sample CPU-availability median;
 - a three-step temporal horizon for task-level Active Inference;
 - meta-likelihood learning enabled with `learning_A: true`;
-- the bearing-aware calibrated dBm likelihood and persistent `-54 dBm`
-  termination rule.
+- the bearing-aware calibrated dBm likelihood and controlled 0.45 m
+  ground-truth distance termination rule.
 
 The task likelihood assumes the robot is restored to arena positive x before
 RSSI is observed. Its distance and arena-bearing parameters are shared with the
@@ -398,8 +398,6 @@ visualization:
   host: 0.0.0.0
   port: 8000
   history_limit: 500
-  ground_truth_source_x: 2.975
-  ground_truth_source_y: 4.375
 ```
 
 While `active-inference-meta-ros` is running, open:
@@ -416,8 +414,11 @@ latency, external CPU availability, prediction error, information proxy, and
 meta-model decision. The belief grid automatically changes when meta-inference
 switches between 2x2, 5x5, 10x10, and 20x20 representations.
 
-The ground-truth marker is an evaluation overlay only and never enters task or
-meta inference. Remove both `ground_truth_source_*` fields to hide it.
+When `termination.provider: source_distance`, the dashboard automatically uses
+that section's `source_x` and `source_y` for the ground-truth marker. This is
+an evaluation overlay only and never enters task or meta inference. Set
+`visualization.ground_truth_source_x` and `ground_truth_source_y` only when an
+explicit display override is required.
 
 For an ICRA demo recording, add the URL as an OBS Browser Source beside the
 real camera feed. A 1280x720 browser source is suitable for a side-by-side

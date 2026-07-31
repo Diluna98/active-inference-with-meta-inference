@@ -56,7 +56,10 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.visualization.mode == "dashboard"
     assert config.visualization.host == "0.0.0.0"
     assert config.visualization.port == 8000
-    assert config.visualization.ground_truth_source_x == pytest.approx(2.975)
+    assert config.visualization.ground_truth_source_x is None
+    assert config.navigation.termination.provider == "source_distance"
+    assert config.navigation.termination.source_x == pytest.approx(2.975)
+    assert config.navigation.termination.distance_threshold == pytest.approx(0.45)
 
 
 def test_policy_building_does_not_require_ros_imports():

@@ -68,7 +68,20 @@ def test_dashboard_marks_runtime_outcome():
         port=0,
     )
     try:
-        server.mark_complete(terminated=True)
-        assert server.snapshot()["status"] == "goal reached"
+        server.submit(telemetry())
+        deadline = time.monotonic() + 2.0
+        while server.snapshot()["telemetry"] is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        server.mark_complete(
+            terminated=True,
+            robot_x=2.625,
+            robot_y=4.375,
+            rssi=-52.0,
+        )
+        state = server.snapshot()
+        assert state["status"] == "goal reached"
+        assert state["telemetry"]["robot"]["x"] == 2.625
+        assert state["telemetry"]["rssi_dbm"] == -52.0
+        assert state["path"][-1] == {"x": 2.625, "y": 4.375}
     finally:
         server.close()

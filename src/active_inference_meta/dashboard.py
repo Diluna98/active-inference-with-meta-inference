@@ -95,10 +95,31 @@ class LiveDashboardServer:
             except Full:
                 pass
 
-    def mark_complete(self, *, terminated: bool) -> None:
+    def mark_complete(
+        self,
+        *,
+        terminated: bool,
+        robot_x: float | None = None,
+        robot_y: float | None = None,
+        rssi: float | None = None,
+    ) -> None:
         """Expose the final runtime outcome to connected browsers."""
 
+        if any(value is not None for value in (robot_x, robot_y, rssi)) and any(
+            value is None for value in (robot_x, robot_y, rssi)
+        ):
+            raise ValueError("Final robot x, y, and RSSI must be provided together.")
         with self._lock:
+            telemetry = self._state["telemetry"]
+            if telemetry is not None and robot_x is not None:
+                telemetry["robot"]["x"] = robot_x
+                telemetry["robot"]["y"] = robot_y
+                telemetry["rssi_dbm"] = rssi
+                point = {"x": robot_x, "y": robot_y}
+                path = self._state["path"]
+                if not path or path[-1] != point:
+                    path.append(point)
+                    del path[:-self.history_limit]
             self._state["status"] = "goal reached" if terminated else "planning limit"
             self._state["updated_at_unix_s"] = time()
 

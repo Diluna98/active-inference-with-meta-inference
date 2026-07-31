@@ -19,9 +19,11 @@ from active_inference_navigation.adapters.turtlebot import (
     TurtleBotActionExecutor,
 )
 from active_inference_navigation.agent import NavigationAgentConfig
-from active_inference_navigation.constraints import GridBoundaryConstraint
 from active_inference_navigation.interfaces import ObservationUnavailableError
-from active_inference_navigation.ros_runtime import build_termination_condition
+from active_inference_navigation.ros_runtime import (
+    build_action_constraint,
+    build_termination_condition,
+)
 from active_inference_navigation.runtime import NavigationRuntime, NavigationRuntimeResult
 
 from .adaptive_navigation import AdaptiveNavigationConfig
@@ -228,6 +230,11 @@ def run_ros_meta_navigation(
                     config.visualization.ground_truth_source_x,
                     config.visualization.ground_truth_source_y,
                 )
+            elif nav.termination.provider == "source_distance":
+                ground_truth = (
+                    nav.termination.source_x,
+                    nav.termination.source_y,
+                )
             dashboard = LiveDashboardServer(
                 arena_width=nav.grid.width,
                 arena_height=nav.grid.height,
@@ -273,7 +280,7 @@ def run_ros_meta_navigation(
         observation_source=source,
         action_executor=actuator,
         termination_condition=build_termination_condition(nav),
-        action_constraint=GridBoundaryConstraint(geometry),
+        action_constraint=build_action_constraint(nav),
         temporal_horizon=1,
     )
     try:
@@ -296,7 +303,13 @@ def run_ros_meta_navigation(
             )
         result = runtime.run(planning_windows=planning_windows)
         if dashboard is not None:
-            dashboard.mark_complete(terminated=result.terminated)
+            final_observation = result.observations[-1]
+            dashboard.mark_complete(
+                terminated=result.terminated,
+                robot_x=final_observation.x,
+                robot_y=final_observation.y,
+                rssi=final_observation.rssi,
+            )
         return result
     finally:
         actuator.stop()
