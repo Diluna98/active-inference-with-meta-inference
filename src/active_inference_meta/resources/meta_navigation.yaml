@@ -26,7 +26,7 @@ motion:
   control_period: 0.05
   action_timeout: 30.0
   # Restore a repeatable antenna orientation before the next RSSI observation.
-  final_heading: positive_y
+  final_heading: positive_x
   settling_time: 2.5
 active_inference:
   goal_resolution: 2
