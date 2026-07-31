@@ -57,7 +57,7 @@ def test_adaptive_policy_exposes_navigation_runtime_agent_protocol():
         decision_sink=lambda step, resolution, decision: decisions.append(
             (step, resolution, decision.selected_resolution)
         ),
-        clock=iter((1.0, 1.01)).__next__,
+        clock=iter((1.0, 1.01, 2.0, 2.004)).__next__,
     )
     policy.reset()
     policy.observe(np.asarray([0.0, 0.0, 10.0]), time_step=0)
@@ -83,7 +83,7 @@ def test_policy_emits_dashboard_telemetry_after_measured_inference():
         config=AdaptiveNavigationConfig(maximum_steps=3),
         meta_controller=KeepResolutionController(),
         telemetry_sink=snapshots.append,
-        clock=iter((1.0, 1.01)).__next__,
+        clock=iter((1.0, 1.01, 2.0, 2.004)).__next__,
     )
     policy.reset()
     policy.observe(np.asarray([0.5, 1.5, -64.0]), time_step=0)
@@ -94,6 +94,7 @@ def test_policy_emits_dashboard_telemetry_after_measured_inference():
 
     assert len(snapshots) == 1
     assert np.isclose(snapshots[0].inference_latency_ms, 10.0)
+    assert np.isclose(snapshots[0].meta_inference_latency_ms, 4.0)
     assert snapshots[0].rssi == -64.0
     assert snapshots[0].meta_observation.cpu_availability == 75.0
     assert snapshots[0].selected_resolution == 2

@@ -386,6 +386,91 @@ Repeat with fixed resolutions `2`, `5`, `10`, and `20`, using a different
 output filename for each run. Existing non-empty output files are appended, so
 use a new filename when trials must remain separate.
 
+## Record evaluation runs for the results table
+
+The calibration profiler above is intended for fitting meta-level likelihoods.
+For experimental evaluation, use the separate run logger. It works with both
+meta-inference and fixed-resolution configurations and creates a new file for
+every invocation:
+
+```yaml
+experiment_logging:
+  enabled: true
+  output_directory: experiment_runs
+  filename_prefix: robot_run
+  run_label: ""
+  cpu_condition: uncontrolled
+  success_distance_m: 0.5
+```
+
+The known source position is taken from `termination.source_x` and
+`termination.source_y`. It can instead be specified as `source_x` and
+`source_y` inside `experiment_logging`. The 0.5 m success threshold matches the
+first-passage result reported in Table I of the paper and remains independent
+of the runtime termination distance.
+
+Identify the CPU condition and trial without editing the YAML between runs:
+
+```bash
+active-inference-meta-ros \
+  --config src/active_inference_meta/resources/meta_navigation.yaml \
+  --planning-windows 100 \
+  --cpu-condition low \
+  --run-label bottom-left-01
+```
+
+The program prints the created file path. Filenames contain a UTC timestamp,
+the automatically detected method, and a random run identifier, for example:
+
+```text
+experiment_runs/robot_run_20260731T184512.123456Z_meta_a1b2c3d4.csv
+experiment_runs/robot_run_20260731T191102.654321Z_fixed-10x10_e5f6a7b8.csv
+```
+
+Run the fixed 10x10 reference baseline from the same main configuration with:
+
+```bash
+active-inference-meta-ros \
+  --config src/active_inference_meta/resources/meta_navigation.yaml \
+  --planning-windows 100 \
+  --fixed-resolution 10 \
+  --cpu-condition low \
+  --run-label bottom-left-01
+```
+
+`--fixed-resolution` disables meta-inference for that process only. Omitting it
+uses the YAML `meta_inference` settings, which are adaptive in the packaged
+configuration.
+
+Files are opened in exclusive-create mode, so an earlier trial cannot be
+overwritten. Every `task_step` row stores position, distance to source, RSSI,
+action, active resolution, task and meta inference latency, CPU availability,
+prediction error, information gain, MAP source estimate, and MAP localization
+error. The final `run_summary` row stores:
+
+- success at 0.5 m;
+- executed action count;
+- minimum source distance;
+- total task inference time;
+- total meta inference time;
+- total task-plus-meta computation;
+- final prediction error; and
+- final MAP localization error.
+
+If the robot run raises an exception, a `run_error` row preserves its partial
+compute totals and the error. The CSV `method`, `meta_inference_enabled`, and
+`fixed_resolution` columns distinguish adaptive and fixed runs without relying
+on the filename.
+
+To reproduce the paper table for each CPU condition, compute success percentage
+over all trials. For successful trials only, report the median and interquartile
+range of `action_count`, `total_compute_ms`, `total_meta_inference_ms`, and
+`final_prediction_error`. Computation reduction relative to fixed 10x10 is:
+
+```text
+100 * (1 - median adaptive total compute / median fixed-10x10 total compute)
+```
+
 ## Live browser dashboard
 
 The packaged robot configuration enables a lightweight telemetry server:

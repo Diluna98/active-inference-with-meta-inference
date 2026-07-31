@@ -97,6 +97,34 @@ class ProfilingConfig:
 
 
 @dataclass(frozen=True)
+class ExperimentLoggingConfig:
+    """Per-run evaluation logging for fixed and adaptive robot experiments."""
+
+    enabled: bool = False
+    output_directory: Path = Path("experiment_runs")
+    filename_prefix: str = "robot_run"
+    run_label: str = ""
+    cpu_condition: str = "uncontrolled"
+    success_distance_m: float = 0.5
+    source_x: float | None = None
+    source_y: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.enabled and not str(self.output_directory):
+            raise ValueError("An experiment-log output directory is required.")
+        if not self.filename_prefix.strip():
+            raise ValueError("The experiment-log filename prefix must not be empty.")
+        if self.cpu_condition not in {"low", "medium", "high", "uncontrolled"}:
+            raise ValueError(
+                "cpu_condition must be low, medium, high, or uncontrolled."
+            )
+        if self.success_distance_m <= 0.0:
+            raise ValueError("success_distance_m must be positive.")
+        if (self.source_x is None) != (self.source_y is None):
+            raise ValueError("Experiment source_x and source_y must be set together.")
+
+
+@dataclass(frozen=True)
 class VisualizationConfig:
     """Asynchronous runtime display settings."""
 
@@ -163,6 +191,9 @@ class MetaRuntimeConfig:
         default_factory=MetaPreferenceParameters
     )
     profiling: ProfilingConfig = field(default_factory=ProfilingConfig)
+    experiment_logging: ExperimentLoggingConfig = field(
+        default_factory=ExperimentLoggingConfig
+    )
     visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
     meta_learning: MetaLearningCheckpointConfig = field(
         default_factory=MetaLearningCheckpointConfig
@@ -174,6 +205,14 @@ class MetaRuntimeConfig:
                 "Profiling requires meta_inference.enabled: false "
                 "to keep the task resolution fixed."
             )
+        if self.experiment_logging.enabled:
+            source_is_explicit = self.experiment_logging.source_x is not None
+            source_is_termination = self.navigation.termination.provider == "source_distance"
+            if not source_is_explicit and not source_is_termination:
+                raise ValueError(
+                    "Experiment logging requires source coordinates either in "
+                    "experiment_logging or source_distance termination."
+                )
 
 
 def _section(data: dict[str, Any], key: str) -> dict[str, Any]:
@@ -206,6 +245,11 @@ def _parse(data: Any, *, base_directory: Path | None = None) -> MetaRuntimeConfi
     profiling_data = _section(data, "profiling")
     if "output" in profiling_data:
         profiling_data["output"] = Path(profiling_data["output"])
+    experiment_logging_data = _section(data, "experiment_logging")
+    if "output_directory" in experiment_logging_data:
+        experiment_logging_data["output_directory"] = Path(
+            experiment_logging_data["output_directory"]
+        )
     visualization_data = _section(data, "visualization")
     if "output" in visualization_data:
         visualization_data["output"] = Path(visualization_data["output"])
@@ -233,6 +277,7 @@ def _parse(data: Any, *, base_directory: Path | None = None) -> MetaRuntimeConfi
             _section(data, "meta_preferences")
         ),
         profiling=ProfilingConfig(**profiling_data),
+        experiment_logging=ExperimentLoggingConfig(**experiment_logging_data),
         visualization=VisualizationConfig(**visualization_data),
         meta_learning=MetaLearningCheckpointConfig(**meta_learning_data),
     )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from dataclasses import replace
 from pathlib import Path
 from threading import Thread
 from time import monotonic, sleep
@@ -35,7 +36,9 @@ from .config import (
 )
 from .controller import MetaInferenceConfig, MetaInferenceController
 from .dashboard import LiveDashboardServer
+from .experiment_logging import ExperimentRunLogger
 from .likelihood import MetaLikelihoodParameters
+from .models import TaskTelemetry
 from .observations import MetaDecision
 from .policy import AdaptiveNavigationPolicy
 from .profiling import CsvMetaObservationLogger
@@ -220,6 +223,37 @@ def run_ros_meta_navigation(
         if config.profiling.enabled
         else None
     )
+    experiment_logger = None
+    if config.experiment_logging.enabled:
+        log_config = config.experiment_logging
+        source_x = (
+            log_config.source_x
+            if log_config.source_x is not None
+            else nav.termination.source_x
+        )
+        source_y = (
+            log_config.source_y
+            if log_config.source_y is not None
+            else nav.termination.source_y
+        )
+        assert source_x is not None and source_y is not None
+        experiment_logger = ExperimentRunLogger(
+            log_config.output_directory,
+            meta_inference_enabled=config.adaptive.enabled,
+            fixed_resolution=(
+                None if config.adaptive.enabled else config.adaptive.fixed_resolution
+            ),
+            arena_width=nav.grid.width,
+            arena_height=nav.grid.height,
+            task_temporal_horizon=nav.active_inference.temporal_horizon,
+            source_x=source_x,
+            source_y=source_y,
+            success_distance_m=log_config.success_distance_m,
+            cpu_condition=log_config.cpu_condition,
+            run_label=log_config.run_label,
+            filename_prefix=log_config.filename_prefix,
+        )
+        print(f"EXPERIMENT log: {experiment_logger.path}", flush=True)
     belief_visualizer = None
     dashboard = None
     if config.visualization.enabled:
@@ -262,6 +296,12 @@ def run_ros_meta_navigation(
                 refresh_steps=config.visualization.refresh_steps,
                 clear_terminal=config.visualization.clear_terminal,
             )
+    def emit_telemetry(telemetry: TaskTelemetry) -> None:
+        if dashboard is not None:
+            dashboard.submit(telemetry)
+        if experiment_logger is not None:
+            experiment_logger.record(telemetry)
+
     policy = build_adaptive_policy(
         config,
         observation_sink=(
@@ -272,7 +312,11 @@ def run_ros_meta_navigation(
             if belief_visualizer is not None
             else None
         ),
-        telemetry_sink=dashboard.submit if dashboard is not None else None,
+        telemetry_sink=(
+            emit_telemetry
+            if dashboard is not None or experiment_logger is not None
+            else None
+        ),
         decision_sink=print_meta_decision,
     )
     runtime = NavigationRuntime(
@@ -310,7 +354,13 @@ def run_ros_meta_navigation(
                 robot_y=final_observation.y,
                 rssi=final_observation.rssi,
             )
+        if experiment_logger is not None:
+            experiment_logger.finish(result)
         return result
+    except BaseException as error:
+        if experiment_logger is not None and not experiment_logger.finished:
+            experiment_logger.fail(error)
+        raise
     finally:
         actuator.stop()
         try:
@@ -321,6 +371,8 @@ def run_ros_meta_navigation(
                 close_compute_source()
             if profile_logger is not None:
                 profile_logger.close()
+            if experiment_logger is not None:
+                experiment_logger.close()
             if belief_visualizer is not None:
                 belief_visualizer.close()
             if dashboard is not None:
@@ -334,6 +386,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", type=Path)
     parser.add_argument("--planning-windows", type=int, default=20)
+    parser.add_argument(
+        "--fixed-resolution",
+        type=int,
+        choices=(2, 5, 10, 20),
+        help="Disable meta-inference and run one fixed task model.",
+    )
+    parser.add_argument("--run-label")
+    parser.add_argument(
+        "--cpu-condition",
+        choices=("low", "medium", "high", "uncontrolled"),
+    )
+    parser.add_argument("--experiment-output-directory", type=Path)
     return parser
 
 
@@ -352,6 +416,43 @@ def main() -> None:
         if args.config is None
         else load_meta_runtime_config(args.config)
     )
+    if args.fixed_resolution is not None:
+        config = replace(
+            config,
+            adaptive=replace(
+                config.adaptive,
+                enabled=False,
+                initial_resolution=args.fixed_resolution,
+                fixed_resolution=args.fixed_resolution,
+            ),
+        )
+    if any(
+        value is not None
+        for value in (
+            args.run_label,
+            args.cpu_condition,
+            args.experiment_output_directory,
+        )
+    ):
+        logging = replace(
+            config.experiment_logging,
+            run_label=(
+                config.experiment_logging.run_label
+                if args.run_label is None
+                else args.run_label
+            ),
+            cpu_condition=(
+                config.experiment_logging.cpu_condition
+                if args.cpu_condition is None
+                else args.cpu_condition
+            ),
+            output_directory=(
+                config.experiment_logging.output_directory
+                if args.experiment_output_directory is None
+                else args.experiment_output_directory
+            ),
+        )
+        config = replace(config, experiment_logging=logging)
     rclpy.init()
     node = rclpy.create_node("active_inference_meta_navigation")
     executor = MultiThreadedExecutor()

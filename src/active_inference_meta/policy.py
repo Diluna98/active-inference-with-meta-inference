@@ -47,6 +47,7 @@ class AdaptiveNavigationPolicy:
     _observation: np.ndarray | None = field(init=False, default=None, repr=False)
     _time_step: int = field(init=False, default=0)
     _latency_ms: float = field(init=False, default=0.0)
+    _meta_latency_ms: float = field(init=False, default=0.0)
     _last_decision: MetaDecision | None = field(init=False, default=None)
     _last_meta_observation: MetaObservation | None = field(init=False, default=None)
     _last_meta_observation_step: int | None = field(init=False, default=None)
@@ -70,6 +71,7 @@ class AdaptiveNavigationPolicy:
         self._observation = None
         self._time_step = 0
         self._latency_ms = 0.0
+        self._meta_latency_ms = 0.0
         self._last_decision = None
         self._last_meta_observation = None
         self._last_meta_observation_step = None
@@ -118,6 +120,7 @@ class AdaptiveNavigationPolicy:
             raise RuntimeError("observe() must be called before select_action().")
         selected = self._agent.select_action(allowed_actions)
         self._last_decision = None
+        self._meta_latency_ms = 0.0
 
         if not self.meta_inference_enabled:
             meta_observation = self._build_meta_observation()
@@ -134,7 +137,12 @@ class AdaptiveNavigationPolicy:
             self._last_meta_observation = meta_observation
             self._last_meta_observation_step = self._time_step
             current_resolution = self.active_resolution
+            started = float(self.clock())
             decision = self.meta_controller.infer(current_resolution, meta_observation)
+            self._meta_latency_ms = max(
+                0.0,
+                (float(self.clock()) - started) * 1000.0,
+            )
             self._last_decision = decision
             if self.decision_sink is not None:
                 self.decision_sink(self._time_step, current_resolution, decision)
@@ -190,6 +198,7 @@ class AdaptiveNavigationPolicy:
                 rssi=float(self._observation[2]),
                 selected_action=action,
                 inference_latency_ms=self._latency_ms,
+                meta_inference_latency_ms=self._meta_latency_ms,
                 meta_observation=self._last_meta_observation,
                 meta_observation_step=self._last_meta_observation_step,
                 selected_resolution=(

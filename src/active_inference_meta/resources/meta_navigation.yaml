@@ -47,6 +47,14 @@ meta_inference:
 profiling:
   enabled: false
   output: meta_profile.csv
+experiment_logging:
+  enabled: true
+  output_directory: experiment_runs
+  filename_prefix: robot_run
+  run_label: ""
+  cpu_condition: uncontrolled
+  # Matches the first-passage success threshold reported in Table I.
+  success_distance_m: 0.5
 visualization:
   enabled: true
   mode: dashboard

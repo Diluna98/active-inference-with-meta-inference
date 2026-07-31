@@ -1,11 +1,14 @@
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
+from active_inference_navigation.config import TerminationConfig
 
 from active_inference_meta.config import (
     AdaptiveConfig,
     ComputeConfig,
+    ExperimentLoggingConfig,
     MetaLearningCheckpointConfig,
     MetaRuntimeConfig,
     ProfilingConfig,
@@ -148,3 +151,52 @@ def test_profiling_requires_fixed_resolution_mode():
     )
 
     assert config.adaptive.task_resolution == 5
+
+
+def test_experiment_logging_supports_meta_and_fixed_runs():
+    adaptive = MetaRuntimeConfig(
+        navigation=replace(
+            MetaRuntimeConfig().navigation,
+            termination=TerminationConfig(
+                provider="source_distance",
+                source_x=3.0,
+                source_y=4.0,
+                distance_threshold=0.45,
+            ),
+        ),
+        experiment_logging=ExperimentLoggingConfig(enabled=True),
+    )
+    fixed = replace(
+        adaptive,
+        adaptive=AdaptiveConfig(enabled=False, fixed_resolution=10),
+    )
+
+    assert adaptive.experiment_logging.enabled
+    assert fixed.adaptive.task_resolution == 10
+
+
+def test_experiment_logging_requires_known_source():
+    with pytest.raises(ValueError, match="source coordinates"):
+        MetaRuntimeConfig(
+            experiment_logging=ExperimentLoggingConfig(enabled=True),
+        )
+
+
+def test_ros_parser_accepts_run_metadata_and_fixed_baseline():
+    args = build_parser().parse_args(
+        [
+            "--fixed-resolution",
+            "10",
+            "--cpu-condition",
+            "medium",
+            "--run-label",
+            "bottom-left-03",
+            "--experiment-output-directory",
+            "runs",
+        ]
+    )
+
+    assert args.fixed_resolution == 10
+    assert args.cpu_condition == "medium"
+    assert args.run_label == "bottom-left-03"
+    assert args.experiment_output_directory == Path("runs")

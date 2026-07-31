@@ -161,6 +161,7 @@ class TaskTelemetry:
     rssi: float
     selected_action: tuple[int, int] | None
     inference_latency_ms: float
+    meta_inference_latency_ms: float = 0.0
     meta_observation: MetaObservation | None = None
     meta_observation_step: int | None = None
     selected_resolution: int | None = None
@@ -174,8 +175,18 @@ class TaskTelemetry:
             raise ValueError("Telemetry belief size must match its resolution.")
         if not np.all(np.isfinite(belief)) or np.any(belief < 0.0) or belief.sum() <= 0.0:
             raise ValueError("Telemetry belief must be a valid probability vector.")
-        values = (self.robot_x, self.robot_y, self.rssi, self.inference_latency_ms)
-        if not np.all(np.isfinite(values)) or self.inference_latency_ms < 0.0:
+        values = (
+            self.robot_x,
+            self.robot_y,
+            self.rssi,
+            self.inference_latency_ms,
+            self.meta_inference_latency_ms,
+        )
+        if (
+            not np.all(np.isfinite(values))
+            or self.inference_latency_ms < 0.0
+            or self.meta_inference_latency_ms < 0.0
+        ):
             raise ValueError("Telemetry measurements must be finite and latency nonnegative.")
         if self.selected_action is not None:
             action = tuple(int(value) for value in self.selected_action)

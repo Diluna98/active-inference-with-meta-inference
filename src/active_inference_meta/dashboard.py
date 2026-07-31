@@ -179,6 +179,7 @@ class LiveDashboardServer:
                 else list(telemetry.selected_action)
             ),
             "inference_latency_ms": telemetry.inference_latency_ms,
+            "meta_inference_latency_ms": telemetry.meta_inference_latency_ms,
             "meta_observation_step": telemetry.meta_observation_step,
             "meta_observation": (
                 None
