@@ -31,6 +31,10 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.compute.provider == "external_psutil"
     assert config.compute.sample_interval_seconds == 0.25
     assert config.navigation.active_inference.temporal_horizon == 3
+    assert config.navigation.likelihood_provider == "bearing_calibrated_dbm"
+    assert config.navigation.rssi_likelihood.bearing_cosine_coefficient == pytest.approx(
+        4.761
+    )
     assert config.meta_agent.learning_A is True
     assert config.meta_agent.learning_rate == 0.1
     assert config.meta_likelihood.mu_err.shape == (4, 4)

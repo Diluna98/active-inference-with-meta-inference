@@ -117,6 +117,12 @@ def build_adaptive_policy(
         minimum_calibrated_distance=nav.rssi_likelihood.minimum_calibrated_distance,
         minimum_rssi=nav.rssi_likelihood.minimum_rssi,
         maximum_rssi=nav.rssi_likelihood.maximum_rssi,
+        bearing_cosine_coefficient=(
+            nav.rssi_likelihood.bearing_cosine_coefficient
+        ),
+        bearing_sine_coefficient=(
+            nav.rssi_likelihood.bearing_sine_coefficient
+        ),
     )
     return AdaptiveNavigationPolicy(
         compute_source=ExternalCpuAvailabilitySource(

@@ -27,7 +27,8 @@ motion:
   action_timeout: 30.0
   # Restore a repeatable antenna orientation before the next RSSI observation.
   final_heading: positive_x
-  settling_time: 2.5
+  # At about 1 RSSI packet/s, this replaces the complete five-sample window.
+  settling_time: 6.0
 active_inference:
   goal_resolution: 2
   temporal_horizon: 3
@@ -123,11 +124,14 @@ termination:
   provider: persistent_rssi
   rssi_threshold: -54.0
   consecutive_observations: 3
-likelihood_provider: calibrated_dbm
+likelihood_provider: bearing_calibrated_dbm
 rssi_likelihood:
-  reference_rssi: -63.02
-  path_loss_exponent: 1.635
-  signal_sigma: 3.37
-  minimum_calibrated_distance: 1.0
+  # Fit to median-of-five samples with the robot restored to arena +x.
+  reference_rssi: -63.109
+  path_loss_exponent: 3.104
+  signal_sigma: 7.0
+  minimum_calibrated_distance: 0.35
   minimum_rssi: -95.0
-  maximum_rssi: -50.0
+  maximum_rssi: -25.0
+  bearing_cosine_coefficient: 4.761
+  bearing_sine_coefficient: -9.065

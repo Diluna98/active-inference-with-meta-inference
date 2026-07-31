@@ -254,7 +254,13 @@ The packaged configuration uses:
 - a five-sample RSSI median and five-sample CPU-availability median;
 - a three-step temporal horizon for task-level Active Inference;
 - meta-likelihood learning enabled with `learning_A: true`;
-- the calibrated dBm likelihood and persistent `-54 dBm` termination rule.
+- the bearing-aware calibrated dBm likelihood and persistent `-54 dBm`
+  termination rule.
+
+The task likelihood assumes the robot is restored to arena positive x before
+RSSI is observed. Its distance and arena-bearing parameters are shared with the
+standalone navigation package; meta-inference changes task-model resolution,
+not the sensor model.
 
 External CPU availability is sampled continuously on the processor running the
 command. The sampler subtracts CPU time used by this program and its live child
