@@ -14,6 +14,7 @@ from active_inference_navigation.models import NavigationAction
 from .adaptive_navigation import (
     AdaptiveNavigationConfig,
     _source_belief,
+    build_information_reference_likelihood,
     infer_adaptive_task_policies,
     policy_averaged_rssi_surprise,
     rebuild_navigation_agent,
@@ -43,6 +44,7 @@ class AdaptiveNavigationPolicy:
     decision_sink: Callable[[int, int, MetaDecision], None] | None = None
     clock: Any = perf_counter
     _agent: Any = field(init=False, repr=False)
+    _information_reference_likelihood: Any = field(init=False, repr=False)
     _navigation_config: Any = field(init=False, repr=False)
     _observation: np.ndarray | None = field(init=False, default=None, repr=False)
     _time_step: int = field(init=False, default=0)
@@ -54,6 +56,12 @@ class AdaptiveNavigationPolicy:
 
     def __post_init__(self) -> None:
         self._build_initial_agent()
+        self._information_reference_likelihood = (
+            build_information_reference_likelihood(
+                self.config.navigation,
+                resolution=self.config.information_reference_resolution,
+            )
+        )
 
     def _build_initial_agent(self) -> None:
         self._navigation_config = replace(
@@ -210,7 +218,7 @@ class AdaptiveNavigationPolicy:
 
     def _task_metrics(self) -> TaskInferenceMetrics:
         assert self._observation is not None
-        information_gain = self._agent.likelihood.model.compute_sensitivity(
+        information_gain = self._information_reference_likelihood.compute_sensitivity(
             self._observation
         )
         prediction_error = policy_averaged_rssi_surprise(

@@ -14,6 +14,11 @@ from active_inference_navigation import (
     NavigationAgentConfig,
     build_navigation_agent,
 )
+from active_inference_navigation.likelihoods import (
+    BearingCalibratedDbmLikelihood,
+    CalibratedDbmLikelihood,
+    RssiNavigationLikelihood,
+)
 
 from .controller import MetaInferenceController
 from .interfaces import ComputeResourceSource
@@ -37,6 +42,7 @@ class AdaptiveNavigationConfig:
         )
     )
     initial_resolution: int = 2
+    information_reference_resolution: int = 20
     maximum_steps: int = 18
     meta_interval: int = 3
 
@@ -49,6 +55,10 @@ class AdaptiveNavigationConfig:
             raise ValueError("The normalized RSSI signal preference must be enabled.")
         if self.initial_resolution not in (2, 5, 10, 20):
             raise ValueError("initial_resolution must be one of 2, 5, 10, or 20.")
+        if self.information_reference_resolution != 20:
+            raise ValueError(
+                "The paper's Fisher-information reference resolution must be 20."
+            )
         if self.maximum_steps < 1 or self.meta_interval < 1:
             raise ValueError("maximum_steps and meta_interval must be positive.")
         if self.meta_interval != 3:
@@ -100,6 +110,56 @@ class AdaptiveNavigationResult:
     @property
     def positions(self) -> np.ndarray:
         return np.asarray([step.position for step in self.steps], dtype=float)
+
+
+def build_information_reference_likelihood(
+    config: NavigationAgentConfig,
+    *,
+    resolution: int = 20,
+) -> RssiNavigationLikelihood:
+    """Build the fixed likelihood-only Fisher-information reference model.
+
+    This object is independent of the task agent and is never replaced when
+    meta-inference changes the active task representation.
+    """
+
+    states_dim = (
+        config.model_size,
+        config.model_size if config.model_rows is None else config.model_rows,
+        int(resolution) ** 2,
+    )
+    common = {
+        "workspace_size": config.workspace_size,
+        "workspace_height": config.workspace_height,
+        "normalized_signal_preference": config.normalized_signal_preference,
+        "master_source_resolution": int(resolution),
+    }
+    if config.likelihood_provider == "rssi_navigation":
+        return RssiNavigationLikelihood(states_dim, **common)
+    if config.likelihood_provider in {"calibrated_dbm", "bearing_calibrated_dbm"}:
+        likelihood_type = (
+            BearingCalibratedDbmLikelihood
+            if config.likelihood_provider == "bearing_calibrated_dbm"
+            else CalibratedDbmLikelihood
+        )
+        directional = {}
+        if likelihood_type is BearingCalibratedDbmLikelihood:
+            directional = {
+                "bearing_cosine_coefficient": config.bearing_cosine_coefficient,
+                "bearing_sine_coefficient": config.bearing_sine_coefficient,
+            }
+        return likelihood_type(
+            states_dim,
+            reference_rssi=config.reference_rssi,
+            path_loss_exponent=config.path_loss_exponent,
+            signal_sigma=config.signal_sigma,
+            minimum_distance=config.minimum_calibrated_distance,
+            minimum_rssi=config.minimum_rssi,
+            maximum_rssi=config.maximum_rssi,
+            **common,
+            **directional,
+        )
+    raise ValueError(f"Unknown likelihood provider: {config.likelihood_provider}")
 
 
 def remap_spatial_belief(
@@ -351,6 +411,10 @@ def run_adaptive_navigation_episode(
     controller = meta_controller or MetaInferenceController()
     controller.reset()
     agent = build_navigation_agent(navigation_config)
+    information_reference = build_information_reference_likelihood(
+        navigation_config,
+        resolution=config.information_reference_resolution,
+    )
     agent.reset()
     observation = environment.reset()
     initial_position = environment.position.copy()
@@ -367,7 +431,7 @@ def run_adaptive_navigation_episode(
         navigation_action = agent.select_action()
 
         source_posterior = _source_belief(agent, step_index)
-        information_gain = agent.likelihood.model.compute_sensitivity(observation)
+        information_gain = information_reference.compute_sensitivity(observation)
         prediction_error = policy_averaged_rssi_surprise(agent, observation)
         task_metrics = TaskInferenceMetrics(
             information_gain_proxy=min(information_gain, 2.0),

@@ -141,6 +141,9 @@ def build_adaptive_policy(
         config=AdaptiveNavigationConfig(
             navigation=navigation_config,
             initial_resolution=adaptive.task_resolution,
+            information_reference_resolution=(
+                adaptive.information_reference_resolution
+            ),
             meta_interval=adaptive.meta_interval,
         ),
         meta_controller=MetaInferenceController(

@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from active_inference_meta import (
     AdaptiveNavigationConfig,
@@ -98,6 +99,40 @@ def test_policy_emits_dashboard_telemetry_after_measured_inference():
     assert snapshots[0].rssi == -64.0
     assert snapshots[0].meta_observation.cpu_availability == 75.0
     assert snapshots[0].selected_resolution == 2
+
+
+def test_fisher_information_uses_fixed_reference_not_active_task_likelihood():
+    policy = AdaptiveNavigationPolicy(
+        compute_source=FixedComputeResourceSource(
+            ComputeResourceObservation(75.0, measured_at=1.0)
+        ),
+        config=AdaptiveNavigationConfig(
+            initial_resolution=2,
+            information_reference_resolution=20,
+            maximum_steps=3,
+        ),
+        meta_controller=KeepResolutionController(),
+        clock=iter((1.0, 1.01, 2.0, 2.004)).__next__,
+    )
+    policy._information_reference_likelihood.compute_sensitivity = (
+        lambda observation: 0.123
+    )
+
+    def reject_active_likelihood(observation):
+        raise AssertionError("The active task likelihood must not supply Fisher information.")
+
+    policy._agent.likelihood.model.compute_sensitivity = reject_active_likelihood
+    policy.reset()
+    policy.observe(np.asarray([0.5, 1.5, -64.0]), time_step=0)
+    policy.infer_states()
+    policy.infer_policies()
+
+    policy.select_action()
+
+    assert policy.active_resolution == 2
+    assert policy._information_reference_likelihood.goal_resolution == 20
+    assert policy.last_meta_observation.information_gain_proxy == pytest.approx(0.123)
+    assert policy.last_meta_observation.inference_latency_ms == pytest.approx(10.0)
 
 
 def test_fixed_resolution_policy_records_without_running_meta_inference():

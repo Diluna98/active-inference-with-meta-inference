@@ -144,9 +144,13 @@ The integrated simulation uses:
 - Online learning of the meta-level prediction-error and latency parameters
 
 The RSSI information proxy is the likelihood-weighted spatial Fisher
-sensitivity of the fixed `20×20` reference signal model. Predictive surprise is
-the mean negative log probability of the observed RSSI bin across task
-policies; it is not weighted by the task policy posterior.
+sensitivity of a dedicated, fixed `20×20` reference likelihood. This
+likelihood-only object is independent of the active task model and is not
+replaced when meta-inference selects another resolution. Its evaluation occurs
+after task state and policy inference, so it is excluded from
+`task_inference_ms`. Predictive surprise is the mean negative log probability
+of the observed RSSI bin across task policies; it is not weighted by the task
+policy posterior.
 
 There is no artificial latency multiplier. The compute-availability
 observation is:

@@ -54,6 +54,7 @@ class AdaptiveConfig:
 
     initial_resolution: int = 10
     candidate_resolutions: tuple[int, int, int, int] = (2, 5, 10, 20)
+    information_reference_resolution: int = 20
     meta_interval: int = 3
     enabled: bool = True
     fixed_resolution: int | None = None
@@ -63,6 +64,11 @@ class AdaptiveConfig:
             raise ValueError("Exactly four candidate resolutions are required.")
         if self.initial_resolution not in self.candidate_resolutions:
             raise ValueError("initial_resolution must be a candidate resolution.")
+        if self.information_reference_resolution != max(self.candidate_resolutions):
+            raise ValueError(
+                "information_reference_resolution must be the highest candidate "
+                "resolution."
+            )
         if self.meta_interval < 1:
             raise ValueError("meta_interval must be positive.")
         if not self.enabled:

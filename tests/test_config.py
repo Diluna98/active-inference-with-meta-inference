@@ -31,6 +31,7 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.navigation.topics.rssi == "/tb4_08/rssi"
     assert config.navigation.topics.cmd_vel == "/tb4_08/cmd_vel"
     assert config.adaptive.candidate_resolutions == (2, 5, 10, 20)
+    assert config.adaptive.information_reference_resolution == 20
     assert config.compute.provider == "external_psutil"
     assert config.compute.sample_interval_seconds == 0.25
     assert config.navigation.active_inference.temporal_horizon == 3
@@ -41,8 +42,15 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.meta_agent.learning_A is True
     assert config.meta_agent.learning_rate == 0.1
     assert config.meta_likelihood.mu_err.shape == (4, 4)
-    assert config.meta_likelihood.mu_cpu.tolist() == [20.0, 57.5, 86.35]
-    assert config.meta_observation_bounds.information_gain_proxy == (0.0, 0.2)
+    assert config.meta_likelihood.mu_cpu.tolist() == [20.0, 45.5, 64.35]
+    assert config.meta_likelihood.sigma_cpu.tolist() == [4.0, 8.0, 3.0]
+    assert config.meta_likelihood.mu_information.tolist() == [
+        0.0281,
+        0.176,
+        0.2062,
+        0.3272,
+    ]
+    assert config.meta_observation_bounds.information_gain_proxy == (0.0, 0.5)
     assert config.meta_observation_bounds.prediction_error == (20.0, 35.0)
     assert config.meta_observation_bounds.inference_latency_ms == (50.0, 9000.0)
     assert config.meta_observation_bounds.cpu_availability == (0.0, 100.0)
@@ -77,6 +85,11 @@ def test_policy_building_does_not_require_ros_imports():
 
     try:
         assert policy.active_resolution == 2
+        assert policy._information_reference_likelihood.goal_resolution == 20
+        assert (
+            policy._information_reference_likelihood
+            is not policy._agent.likelihood.model
+        )
         assert policy.meta_controller.config.learning_A is True
         assert np.array_equal(
             policy.meta_controller.likelihood_model.parameters.mu_err,
