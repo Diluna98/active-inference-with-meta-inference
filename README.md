@@ -266,16 +266,19 @@ RSSI is observed. Its distance and arena-bearing parameters are shared with the
 standalone navigation package; meta-inference changes task-model resolution,
 not the sensor model.
 
-System CPU availability is sampled continuously on the processor running the
-command. It is the percentage of CPU capacity that was actually idle
-(`100 - total system utilization`), including utilization caused by task
-inference, meta-inference, ROS callbacks, and visualization. Including the
-agent workload is necessary under contention: processor time consumed by the
-agent is not available for additional inference, and subtracting it can
-incorrectly report high availability while latency is increasing. The signal
-remains separate from the task observation `[x, y, RSSI]`. Replace
-`ComputeResourceSource` if availability later arrives from a different
-computer or over a ROS topic.
+The default `post_inference_external` CPU mode takes a baseline CPU-time reading
+after task policy inference and action selection, waits for the configured
+sample interval, and takes a second reading. Availability is computed only from
+external CPU work during that fresh interval; earlier task inference cannot
+enter the observation. Agent and ROS work occurring inside the measurement
+interval is subtracted. The 0.25-second probe delay is outside the recorded task
+inference latency.
+
+Set `compute.measurement_mode: system` to continuously report genuinely idle
+system capacity instead. That comparison mode includes all agent work and uses
+the configured rolling median. Both modes remain separate from the task
+observation `[x, y, RSSI]`. Replace `ComputeResourceSource` if availability
+later arrives from a different computer or over a ROS topic.
 
 The support of each continuous meta-observation modality is configured once:
 

@@ -9,6 +9,7 @@ from active_inference_meta import (
     FixedComputeResourceSource,
     MetaObservationBuilder,
     ModelResolution,
+    PostInferenceExternalCpuAvailabilitySource,
     PsutilComputeResourceSource,
     SystemCpuAvailabilitySource,
     TaskInferenceMetrics,
@@ -67,6 +68,22 @@ def test_system_utilization_includes_agent_work_under_contention():
         autostart=False,
     )
     assert source.sample_once().cpu_availability == pytest.approx(50.0)
+
+
+def test_post_inference_source_uses_only_a_fresh_external_interval():
+    waited = []
+    source = PostInferenceExternalCpuAvailabilitySource(
+        sample_interval_seconds=0.25,
+        snapshot_sampler=Sequence(
+            snapshot(10.0, 1000.0, 500.0, 300.0),
+            snapshot(10.25, 1400.0, 700.0, 380.0),
+        ),
+        sleeper=waited.append,
+    )
+
+    # System busy=200, agent busy=80, external busy=120 of 400 CPU-seconds.
+    assert source.read().cpu_availability == pytest.approx(70.0)
+    assert waited == [0.25]
 
 
 def test_external_source_uses_independent_samples_and_median_window():

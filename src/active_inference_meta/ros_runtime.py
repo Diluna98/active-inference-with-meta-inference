@@ -29,7 +29,10 @@ from active_inference_navigation.runtime import NavigationRuntime, NavigationRun
 from active_inference_navigation.termination import SourceFootprintTermination
 
 from .adaptive_navigation import AdaptiveNavigationConfig
-from .compute import SystemCpuAvailabilitySource
+from .compute import (
+    PostInferenceExternalCpuAvailabilitySource,
+    SystemCpuAvailabilitySource,
+)
 from .config import (
     MetaRuntimeConfig,
     load_default_meta_runtime_config,
@@ -132,12 +135,19 @@ def build_adaptive_policy(
             nav.rssi_likelihood.bearing_sine_coefficient
         ),
     )
-    return AdaptiveNavigationPolicy(
-        compute_source=SystemCpuAvailabilitySource(
+    compute_source = (
+        PostInferenceExternalCpuAvailabilitySource(
+            sample_interval_seconds=config.compute.sample_interval_seconds,
+        )
+        if config.compute.measurement_mode == "post_inference_external"
+        else SystemCpuAvailabilitySource(
             median_window=config.compute.median_window,
             timeout_seconds=config.compute.timeout_seconds,
             sample_interval_seconds=config.compute.sample_interval_seconds,
-        ),
+        )
+    )
+    return AdaptiveNavigationPolicy(
+        compute_source=compute_source,
         config=AdaptiveNavigationConfig(
             navigation=navigation_config,
             initial_resolution=adaptive.task_resolution,

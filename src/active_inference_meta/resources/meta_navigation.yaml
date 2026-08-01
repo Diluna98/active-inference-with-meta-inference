@@ -130,6 +130,7 @@ meta_likelihood:
   sigma_cpu: [4.0, 8.0, 3.0]
 compute:
   provider: external_psutil
+  measurement_mode: post_inference_external
   median_window: 5
   timeout_seconds: 2.0
   sample_interval_seconds: 0.25

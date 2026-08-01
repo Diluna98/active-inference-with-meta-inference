@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from statistics import median
 from threading import Event, Lock, Thread
-from time import monotonic
+from time import monotonic, sleep
 
 import numpy as np
 
@@ -247,6 +247,45 @@ class SystemCpuAvailabilitySource:
     def _discard_stale_locked(self, now: float) -> None:
         while self._samples and now - self._samples[0][0] > self.timeout_seconds:
             self._samples.popleft()
+
+
+@dataclass
+class PostInferenceExternalCpuAvailabilitySource:
+    """Measure external availability in a fresh post-inference interval.
+
+    Work completed before ``read()`` is called cannot affect the result.
+    """
+
+    sample_interval_seconds: float = 0.25
+    snapshot_sampler: Callable[[], CpuTimesSnapshot] | None = None
+    clock: Callable[[], float] = monotonic
+    sleeper: Callable[[float], None] = sleep
+
+    def __post_init__(self) -> None:
+        if (
+            not np.isfinite(self.sample_interval_seconds)
+            or self.sample_interval_seconds <= 0.0
+        ):
+            raise ValueError("The CPU sample interval must be positive and finite.")
+        if self.snapshot_sampler is None:
+            self.snapshot_sampler = _PsutilCpuSnapshotSampler(self.clock)
+
+    def read(self) -> ComputeResourceObservation:
+        """Measure external CPU load only over a new interval."""
+
+        assert self.snapshot_sampler is not None
+        previous = self.snapshot_sampler()
+        self.sleeper(self.sample_interval_seconds)
+        current = self.snapshot_sampler()
+        utilization = external_cpu_utilization(previous, current)
+        return ComputeResourceObservation(
+            cpu_availability=100.0 - utilization,
+            measured_at=current.measured_at,
+        )
+
+    def close(self) -> None:
+        """Provide the same lifecycle API as the background sampler."""
+
 
 # Backwards-compatible import names. Availability now means CPU capacity that is
 # actually idle; the external-utilization helper remains available for offline

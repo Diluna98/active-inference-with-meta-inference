@@ -28,9 +28,10 @@ from .models import MetaObservationBounds
 
 @dataclass(frozen=True)
 class ComputeConfig:
-    """External processor-availability observation settings."""
+    """Processor-availability observation settings."""
 
     provider: str = "external_psutil"
+    measurement_mode: str = "post_inference_external"
     median_window: int = 5
     timeout_seconds: float = 2.0
     sample_interval_seconds: float = 0.25
@@ -39,6 +40,11 @@ class ComputeConfig:
         if self.provider not in {"external_psutil", "psutil"}:
             raise ValueError(
                 "The real-world compute provider must be 'external_psutil'."
+            )
+        if self.measurement_mode not in {"post_inference_external", "system"}:
+            raise ValueError(
+                "Compute measurement_mode must be 'post_inference_external' "
+                "or 'system'."
             )
         if (
             self.median_window < 1

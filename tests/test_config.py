@@ -33,6 +33,7 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.adaptive.candidate_resolutions == (2, 5, 10, 20)
     assert config.adaptive.information_reference_resolution == 20
     assert config.compute.provider == "external_psutil"
+    assert config.compute.measurement_mode == "post_inference_external"
     assert config.compute.sample_interval_seconds == 0.25
     assert config.navigation.active_inference.temporal_horizon == 3
     assert config.navigation.likelihood_provider == "bearing_calibrated_dbm"
