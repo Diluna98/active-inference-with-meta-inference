@@ -26,6 +26,7 @@ from active_inference_navigation.ros_runtime import (
     build_termination_condition,
 )
 from active_inference_navigation.runtime import NavigationRuntime, NavigationRuntimeResult
+from active_inference_navigation.termination import SourceFootprintTermination
 
 from .adaptive_navigation import AdaptiveNavigationConfig
 from .compute import ExternalCpuAvailabilitySource
@@ -184,6 +185,7 @@ def run_ros_meta_navigation(
     nav = config.navigation
     geometry = nav.grid.geometry()
     transform = nav.frame.transform()
+    termination_condition = build_termination_condition(nav)
     source = RosObservationSource(
         rssi_median_window=nav.sensors.rssi_median_window,
         odom_timeout=nav.sensors.odom_timeout,
@@ -217,6 +219,11 @@ def run_ros_meta_navigation(
         final_heading=nav.motion.final_heading,
         settling_time=nav.motion.settling_time,
         shutdown_requested=lambda: not rclpy.ok(),
+        movement_stop_condition=(
+            termination_condition.is_position_met
+            if isinstance(termination_condition, SourceFootprintTermination)
+            else None
+        ),
     )
     profile_logger = (
         CsvMetaObservationLogger(config.profiling.output)
@@ -264,7 +271,7 @@ def run_ros_meta_navigation(
                     config.visualization.ground_truth_source_x,
                     config.visualization.ground_truth_source_y,
                 )
-            elif nav.termination.provider == "source_distance":
+            elif nav.termination.provider in {"source_distance", "source_footprint"}:
                 ground_truth = (
                     nav.termination.source_x,
                     nav.termination.source_y,
@@ -323,7 +330,7 @@ def run_ros_meta_navigation(
         agent=policy,
         observation_source=source,
         action_executor=actuator,
-        termination_condition=build_termination_condition(nav),
+        termination_condition=termination_condition,
         action_constraint=build_action_constraint(nav),
         temporal_horizon=1,
     )

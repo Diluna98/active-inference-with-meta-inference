@@ -60,9 +60,15 @@ def test_packaged_meta_runtime_configuration_matches_turtlebot_experiment():
     assert config.visualization.host == "0.0.0.0"
     assert config.visualization.port == 8000
     assert config.visualization.ground_truth_source_x is None
-    assert config.navigation.termination.provider == "source_distance"
+    assert config.navigation.termination.provider == "source_footprint"
     assert config.navigation.termination.source_x == pytest.approx(2.975)
-    assert config.navigation.termination.distance_threshold == pytest.approx(0.45)
+    assert config.navigation.termination.source_y == pytest.approx(4.375)
+    assert config.navigation.termination.source_body_direction == "positive_y"
+    assert config.navigation.termination.transmitter_radius == pytest.approx(0.165)
+    assert config.navigation.termination.navigation_robot_radius == pytest.approx(
+        0.165
+    )
+    assert config.navigation.termination.safety_clearance == pytest.approx(0.10)
 
 
 def test_policy_building_does_not_require_ros_imports():

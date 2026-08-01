@@ -132,13 +132,18 @@ compute:
   timeout_seconds: 2.0
   sample_interval_seconds: 0.25
 termination:
-  # Controlled-demo ground truth; this is not passed to Active Inference.
-  provider: source_distance
+  # The BLE antenna is at the midpoint of the transmitter TurtleBot's -y edge.
+  # Its circular body extends from the antenna toward arena +y.
+  provider: source_footprint
   rssi_threshold: -54.0
   consecutive_observations: 3
   source_x: 2.975
   source_y: 4.375
   distance_threshold: 0.45
+  source_body_direction: positive_y
+  transmitter_radius: 0.165
+  navigation_robot_radius: 0.165
+  safety_clearance: 0.10
 likelihood_provider: bearing_calibrated_dbm
 rssi_likelihood:
   # Fit to median-of-five samples with the robot restored to arena +x.

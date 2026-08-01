@@ -207,11 +207,14 @@ class MetaRuntimeConfig:
             )
         if self.experiment_logging.enabled:
             source_is_explicit = self.experiment_logging.source_x is not None
-            source_is_termination = self.navigation.termination.provider == "source_distance"
+            source_is_termination = self.navigation.termination.provider in {
+                "source_distance",
+                "source_footprint",
+            }
             if not source_is_explicit and not source_is_termination:
                 raise ValueError(
                     "Experiment logging requires source coordinates either in "
-                    "experiment_logging or source_distance termination."
+                    "experiment_logging or a ground-truth source termination."
                 )
 
 

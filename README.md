@@ -499,11 +499,14 @@ latency, external CPU availability, prediction error, information proxy, and
 meta-model decision. The belief grid automatically changes when meta-inference
 switches between 2x2, 5x5, 10x10, and 20x20 representations.
 
-When `termination.provider: source_distance`, the dashboard automatically uses
-that section's `source_x` and `source_y` for the ground-truth marker. This is
-an evaluation overlay only and never enters task or meta inference. Set
-`visualization.ground_truth_source_x` and `ground_truth_source_y` only when an
-explicit display override is required.
+When `termination.provider` is `source_distance` or `source_footprint`, the
+dashboard automatically uses that section's antenna coordinates for the
+ground-truth marker. With `source_footprint`, the TurtleBot action is allowed
+to begin but translation stops at the configured safe body-to-body standoff
+boundary. The same boundary then terminates the episode. This geometry is an
+evaluation and actuator-safety input only and never enters task or meta
+inference. Set `visualization.ground_truth_source_x` and
+`ground_truth_source_y` only when an explicit display override is required.
 
 For an ICRA demo recording, add the URL as an OBS Browser Source beside the
 real camera feed. A 1280x720 browser source is suitable for a side-by-side
