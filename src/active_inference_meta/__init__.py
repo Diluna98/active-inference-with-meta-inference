@@ -67,7 +67,6 @@ __all__ = [
     "baseline_compute_availability",
     "build_information_reference_likelihood",
     "external_cpu_utilization",
-    "system_cpu_utilization",
     "infer_adaptive_task_policies",
     "load_trace",
     "policy_averaged_rssi_surprise",
@@ -76,4 +75,5 @@ __all__ = [
     "run_adaptive_navigation_episode",
     "run_adaptive_simulation_runtime",
     "run_meta_trace",
+    "system_cpu_utilization",
 ]
