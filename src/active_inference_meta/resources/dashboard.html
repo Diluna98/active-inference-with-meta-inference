@@ -18,6 +18,7 @@
       --accent-soft: #e7f1f8;
       --green: #26805a;
       --orange: #a86413;
+      --red: #b4232c;
     }
     * { box-sizing: border-box; }
     html, body { width: 100%; height: 100%; }
@@ -274,6 +275,16 @@
     .accent { color: var(--accent); }
     .good { color: var(--green); }
     .warning { color: var(--orange); }
+    .danger { color: var(--red); }
+    .cpu-state-good .label,
+    .cpu-state-good .value { color: var(--green); }
+    .cpu-state-warning .label,
+    .cpu-state-warning .value { color: var(--orange); }
+    .cpu-state-danger .label,
+    .cpu-state-danger .value { color: var(--red); }
+    .cpu-state-good .bar > i { background: var(--green); }
+    .cpu-state-warning .bar > i { background: var(--orange); }
+    .cpu-state-danger .bar > i { background: var(--red); }
     .bar {
       height: 3px;
       margin-top: 9px;
@@ -380,9 +391,9 @@
           <div id="latency" class="value">—</div>
           <div class="bar"><i id="latencyBar"></i></div>
         </article>
-        <article class="metric">
+        <article id="cpuMetric" class="metric cpu-state-good">
           <div class="label">CPU available</div>
-          <div id="cpu" class="value good">—</div>
+          <div id="cpu" class="value">—</div>
           <div class="bar"><i id="cpuBar"></i></div>
         </article>
         <article class="metric">
@@ -601,12 +612,19 @@
       }
       const meta = telemetry.meta_observation;
       if (meta) {
-        text("cpu", `${fmt(meta.cpu_availability, 1)}%`);
+        const cpuAvailability = meta.cpu_availability;
+        const cpuState =
+          cpuAvailability < 20 ? "danger" :
+          cpuAvailability < 45 ? "warning" :
+          "good";
+        text("cpu", `${fmt(cpuAvailability, 1)}%`);
+        document.getElementById("cpuMetric").className =
+          `metric cpu-state-${cpuState}`;
         text("error", fmt(meta.prediction_error, 2));
         text("information", fmt(meta.information_gain_proxy, 4));
         text("metaAge", `Meta observation at step ${telemetry.meta_observation_step}`);
         document.getElementById("cpuBar").style.width =
-          `${Math.max(0, Math.min(100, meta.cpu_availability))}%`;
+          `${Math.max(0, Math.min(100, cpuAvailability))}%`;
       }
       text("updated", `Updated ${new Date(state.updated_at_unix_s * 1000).toLocaleTimeString()}`);
       draw(state);

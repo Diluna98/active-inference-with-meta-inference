@@ -29,7 +29,7 @@ from active_inference_navigation.runtime import NavigationRuntime, NavigationRun
 from active_inference_navigation.termination import SourceFootprintTermination
 
 from .adaptive_navigation import AdaptiveNavigationConfig
-from .compute import ExternalCpuAvailabilitySource
+from .compute import SystemCpuAvailabilitySource
 from .config import (
     MetaRuntimeConfig,
     load_default_meta_runtime_config,
@@ -133,7 +133,7 @@ def build_adaptive_policy(
         ),
     )
     return AdaptiveNavigationPolicy(
-        compute_source=ExternalCpuAvailabilitySource(
+        compute_source=SystemCpuAvailabilitySource(
             median_window=config.compute.median_window,
             timeout_seconds=config.compute.timeout_seconds,
             sample_interval_seconds=config.compute.sample_interval_seconds,
@@ -349,11 +349,11 @@ def run_ros_meta_navigation(
                 sleep(0.05)
         compute_source = policy.compute_source
         if (
-            isinstance(compute_source, ExternalCpuAvailabilitySource)
+            isinstance(compute_source, SystemCpuAvailabilitySource)
             and not compute_source.wait_until_ready(config.compute.timeout_seconds)
         ):
             raise TimeoutError(
-                "The external CPU sampler did not produce a measurement in time."
+                "The system CPU sampler did not produce a measurement in time."
             )
         result = runtime.run(planning_windows=planning_windows)
         if dashboard is not None:

@@ -10,8 +10,10 @@ from active_inference_meta import (
     MetaObservationBuilder,
     ModelResolution,
     PsutilComputeResourceSource,
+    SystemCpuAvailabilitySource,
     TaskInferenceMetrics,
     external_cpu_utilization,
+    system_cpu_utilization,
 )
 
 
@@ -47,6 +49,24 @@ def test_external_utilization_subtracts_agent_process_cpu():
 
     # System busy=200, agent busy=80, external busy=120 of 400 CPU-seconds.
     assert utilization == pytest.approx(30.0)
+
+
+def test_system_utilization_includes_agent_work_under_contention():
+    previous = snapshot(1.0, 1000.0, 500.0, 20.0)
+    current = snapshot(2.0, 1400.0, 700.0, 100.0)
+
+    # Total system busy=200 of 400 CPU-seconds, regardless of which process
+    # consumed it. Only the remaining 50% was actually available.
+    assert system_cpu_utilization(previous, current) == pytest.approx(50.0)
+
+    source = SystemCpuAvailabilitySource(
+        median_window=1,
+        timeout_seconds=10.0,
+        snapshot_sampler=Sequence(previous, current),
+        clock=lambda: 2.0,
+        autostart=False,
+    )
+    assert source.sample_once().cpu_availability == pytest.approx(50.0)
 
 
 def test_external_source_uses_independent_samples_and_median_window():

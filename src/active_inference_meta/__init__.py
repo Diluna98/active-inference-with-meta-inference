@@ -17,7 +17,9 @@ from .compute import (
     ExternalCpuAvailabilitySource,
     FixedComputeResourceSource,
     PsutilComputeResourceSource,
+    SystemCpuAvailabilitySource,
     external_cpu_utilization,
+    system_cpu_utilization,
 )
 from .controller import MetaInferenceConfig, MetaInferenceController
 from .experiment import load_trace, run_meta_trace
@@ -60,10 +62,12 @@ __all__ = [
     "MetaPreferenceParameters",
     "ModelResolution",
     "PsutilComputeResourceSource",
+    "SystemCpuAvailabilitySource",
     "TaskInferenceMetrics",
     "baseline_compute_availability",
     "build_information_reference_likelihood",
     "external_cpu_utilization",
+    "system_cpu_utilization",
     "infer_adaptive_task_policies",
     "load_trace",
     "policy_averaged_rssi_surprise",

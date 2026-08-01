@@ -38,14 +38,14 @@ class CpuTimesSnapshot:
 
 
 class _PsutilCpuSnapshotSampler:
-    """Sample system CPU time and CPU time consumed by this process tree."""
+    """Sample cumulative system and process-tree CPU times."""
 
     def __init__(self, clock: Callable[[], float]) -> None:
         try:
             import psutil
         except ImportError as error:  # pragma: no cover - dependency is declared
             raise RuntimeError(
-                "ExternalCpuAvailabilitySource requires the 'psutil' package."
+                "SystemCpuAvailabilitySource requires the 'psutil' package."
             ) from error
         self._psutil = psutil
         self._root_process = psutil.Process()
@@ -104,14 +104,37 @@ def external_cpu_utilization(
     return 100.0 * external_busy_delta / total_delta
 
 
+def system_cpu_utilization(
+    previous: CpuTimesSnapshot,
+    current: CpuTimesSnapshot,
+) -> float:
+    """Return total system utilization, including the agent workload.
+
+    This is the complement of CPU capacity that is actually idle and therefore
+    available. Unlike :func:`external_cpu_utilization`, it remains meaningful
+    when the agent and external workloads contend for the same processors.
+    """
+
+    total_delta = current.system_total_seconds - previous.system_total_seconds
+    idle_delta = current.system_idle_seconds - previous.system_idle_seconds
+    if total_delta <= 0.0:
+        raise ValueError("System CPU time must increase between samples.")
+    if idle_delta < 0.0:
+        raise ValueError("System idle CPU time must not decrease between samples.")
+
+    system_busy_delta = float(np.clip(total_delta - idle_delta, 0.0, total_delta))
+    return 100.0 * system_busy_delta / total_delta
+
+
 @dataclass
-class ExternalCpuAvailabilitySource:
-    """Continuously sample CPU availability excluding this agent's process tree.
+class SystemCpuAvailabilitySource:
+    """Continuously sample actual system CPU availability.
 
     Sampling runs on a background thread, independently of task- and meta-level
-    inference calls. The reported availability is the median of recent external
-    CPU-load samples. CPU used by inference, ROS callbacks, visualization
-    threads, and live child processes of this program is subtracted.
+    inference calls. The reported value is the median percentage of CPU capacity
+    that was idle across recent samples. Agent work is intentionally included in
+    total utilization because CPU used by the agent is not available for further
+    inference.
     """
 
     median_window: int = 5
@@ -170,7 +193,7 @@ class ExternalCpuAvailabilitySource:
         assert self.snapshot_sampler is not None
         current = self.snapshot_sampler()
         with self._lock:
-            utilization = external_cpu_utilization(self._previous, current)
+            utilization = system_cpu_utilization(self._previous, current)
             self._previous = current
             availability = 100.0 - utilization
             self._samples.append((current.measured_at, availability))
@@ -184,7 +207,7 @@ class ExternalCpuAvailabilitySource:
         return self._ready_event.wait(timeout_seconds)
 
     def read(self) -> ComputeResourceObservation:
-        """Return the latest median external CPU-availability observation."""
+        """Return the latest median system CPU-availability observation."""
 
         now = float(self.clock())
         with self._lock:
@@ -213,7 +236,7 @@ class ExternalCpuAvailabilitySource:
     def _observation_locked(self, now: float) -> ComputeResourceObservation:
         self._discard_stale_locked(now)
         if not self._samples:
-            raise TimeoutError("No fresh external CPU availability samples are available.")
+            raise TimeoutError("No fresh system CPU availability samples are available.")
         observation = ComputeResourceObservation(
             cpu_availability=float(median(value for _, value in self._samples)),
             measured_at=max(timestamp for timestamp, _ in self._samples),
@@ -225,9 +248,11 @@ class ExternalCpuAvailabilitySource:
         while self._samples and now - self._samples[0][0] > self.timeout_seconds:
             self._samples.popleft()
 
-# Backwards-compatible import name. Its semantics are now explicitly external:
-# unlike the pre-0.1.3 implementation, it excludes this program's CPU workload.
-PsutilComputeResourceSource = ExternalCpuAvailabilitySource
+# Backwards-compatible import names. Availability now means CPU capacity that is
+# actually idle; the external-utilization helper remains available for offline
+# diagnostics but is unsuitable as an availability signal under contention.
+ExternalCpuAvailabilitySource = SystemCpuAvailabilitySource
+PsutilComputeResourceSource = SystemCpuAvailabilitySource
 
 
 @dataclass(frozen=True)

@@ -266,13 +266,15 @@ RSSI is observed. Its distance and arena-bearing parameters are shared with the
 standalone navigation package; meta-inference changes task-model resolution,
 not the sensor model.
 
-External CPU availability is sampled continuously on the processor running the
-command. The sampler subtracts CPU time used by this program and its live child
-processes from system-wide busy time, so task inference, meta-inference, ROS
-callbacks, and visualization are not treated as environmental CPU load. The
-remaining external load is reported as availability (`100 - external CPU
-utilization`) and remains separate from the task observation `[x, y, RSSI]`.
-Replace `ComputeResourceSource` if availability later arrives from a different
+System CPU availability is sampled continuously on the processor running the
+command. It is the percentage of CPU capacity that was actually idle
+(`100 - total system utilization`), including utilization caused by task
+inference, meta-inference, ROS callbacks, and visualization. Including the
+agent workload is necessary under contention: processor time consumed by the
+agent is not available for additional inference, and subtracting it can
+incorrectly report high availability while latency is increasing. The signal
+remains separate from the task observation `[x, y, RSSI]`. Replace
+`ComputeResourceSource` if availability later arrives from a different
 computer or over a ROS topic.
 
 The support of each continuous meta-observation modality is configured once:
@@ -527,8 +529,8 @@ Telemetry is submitted only after `infer_states()` has stopped its latency
 timer. Submission uses a one-frame non-blocking queue; stale frames are dropped
 instead of delaying inference. HTML canvas rendering occurs in the laptop
 browser, not on the TurtleBot. The robot performs only JSON serialization and
-HTTP serving, and this process load is excluded from the external CPU-load
-signal.
+HTTP serving; like all local work, that small load is included in actual system
+CPU utilization.
 
 ## Legacy belief views
 
